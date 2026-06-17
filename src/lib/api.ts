@@ -206,6 +206,19 @@ export interface ChargeMensuelle {
   notes?: string;
 }
 
+export interface ChargeJournaliere {
+  id: string;
+  marche_id: string;
+  date_jour: string;
+  categorie: 'location_materiel' | 'achat_materiaux' | 'autre';
+  designation: string;
+  quantite: number;
+  unite: string;
+  prix_unitaire: number;
+  montant: number;
+  notes?: string;
+}
+
 export interface JournalMateriel {
   id: string;
   marche_id: string;
@@ -283,6 +296,13 @@ export const chargesService = {
   list:   (marcheId: string)            => api.get<ApiResponse<ChargeMensuelle[]>>(`/marches/${marcheId}/charges`),
   save:   (marcheId: string, data: any) => api.post<ApiResponse<ChargeMensuelle>>(`/marches/${marcheId}/charges`, data),
   delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/charges/${id}`),
+};
+
+export const chargesJournalieresService = {
+  list:   (marcheId: string, mois?: string) =>
+    api.get<ApiResponse<ChargeJournaliere[]>>(`/marches/${marcheId}/charges-journalieres`, { params: mois ? { mois } : {} }),
+  create: (marcheId: string, data: any) => api.post<ApiResponse<ChargeJournaliere>>(`/marches/${marcheId}/charges-journalieres`, data),
+  delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/charges-journalieres/${id}`),
 };
 
 export const materielService = {
