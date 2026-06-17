@@ -16,6 +16,21 @@ const STATUTS: Record<string, { label: string; color: string }> = {
   arret:        { label: 'Arrêt',        color: 'bg-gray-100 text-gray-600' },
 };
 
+const ENGINS_PREDEFINIS = [
+  'MAN 8x4',
+  'Pelle hydraulique sur pneu 318',
+  'JCB',
+  'Camion malaxeur 8x4',
+  'Camion benne 7m³',
+  'Niveleuse',
+  'Compacteur 12T',
+  'Pick up A80',
+  'Dokker A48',
+  'Camion-citerne',
+  'Chargeuse',
+  'Poclain 318',
+];
+
 const emptyForm = {
   date_jour: new Date().toISOString().split('T')[0],
   engin: '',
@@ -30,6 +45,7 @@ export default function MaterielPage() {
   const qc     = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [filtreEngin, setFiltreEngin] = useState('');
 
   const { data: marche } = useQuery({
     queryKey: ['marche', id],
@@ -42,6 +58,8 @@ export default function MaterielPage() {
   });
 
   const journal: JournalMateriel[] = data || [];
+  const journalFiltre = filtreEngin ? journal.filter(j => j.engin === filtreEngin) : journal;
+  const enginsDisponibles = Array.from(new Set([...ENGINS_PREDEFINIS, ...journal.map(j => j.engin)]));
 
   const createMut = useMutation({
     mutationFn: () => materielService.create(id, form),
@@ -113,8 +131,11 @@ export default function MaterielPage() {
             </div>
             <div>
               <label className="label">Engin *</label>
-              <input className="input text-sm" placeholder="Niveleuse, JCB..." value={form.engin}
+              <input className="input text-sm" list="engins-list" placeholder="Sélectionner ou saisir..." value={form.engin}
                 onChange={e => setForm(f => ({ ...f, engin: e.target.value }))} />
+              <datalist id="engins-list">
+                {ENGINS_PREDEFINIS.map(e => <option key={e} value={e} />)}
+              </datalist>
             </div>
             <div>
               <label className="label">Heures travaillées</label>
@@ -149,6 +170,18 @@ export default function MaterielPage() {
         </div>
       )}
 
+      {/* Filtre par engin */}
+      <div className="card p-4 flex items-center gap-3">
+        <label className="label mb-0 whitespace-nowrap">Filtrer par engin</label>
+        <select className="input text-sm w-64" value={filtreEngin} onChange={e => setFiltreEngin(e.target.value)}>
+          <option value="">Tous les engins</option>
+          {enginsDisponibles.map(e => <option key={e} value={e}>{e}</option>)}
+        </select>
+        {filtreEngin && (
+          <button onClick={() => setFiltreEngin('')} className="text-xs text-brand-600 hover:underline">Réinitialiser</button>
+        )}
+      </div>
+
       {/* Tableau journal */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -167,7 +200,7 @@ export default function MaterielPage() {
             </thead>
             <tbody className="divide-y">
               {isLoading && <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400 text-sm animate-pulse">Chargement...</td></tr>}
-              {journal.map(j => {
+              {journalFiltre.map(j => {
                 const s = STATUTS[j.statut] || STATUTS.operationnel;
                 return (
                   <tr key={j.id} className="hover:bg-gray-50">
@@ -189,7 +222,7 @@ export default function MaterielPage() {
                   </tr>
                 );
               })}
-              {!isLoading && !journal.length && (
+              {!isLoading && !journalFiltre.length && (
                 <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">Aucune entrée dans le journal</td></tr>
               )}
             </tbody>
