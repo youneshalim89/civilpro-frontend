@@ -23,6 +23,21 @@ const CHAMPS: { key: keyof ChargeMensuelle; label: string }[] = [
 
 const TYPES_MATERIAUX = ['G1', 'G2', 'G3', 'Sable', 'Tout-venant', 'Gravette', 'Grave concassée', 'Ciment', 'Autre'];
 
+const ENGINS_PREDEFINIS = [
+  'MAN 8x4',
+  'Pelle hydraulique sur pneu 318',
+  'JCB',
+  'Camion malaxeur 8x4',
+  'Camion benne 7m³',
+  'Niveleuse',
+  'Compacteur 12T',
+  'Pick up A80',
+  'Dokker A48',
+  'Camion-citerne',
+  'Chargeuse',
+  'Poclain 318',
+];
+
 const CATEGORIES_JOUR: Record<string, string> = {
   location_materiel: 'Location matériel',
   achat_materiaux:   'Achat matériaux',
@@ -212,8 +227,11 @@ export default function ChargesPage() {
               {jourForm.categorie === 'location_materiel' && (
                 <div className="xl:col-span-2">
                   <label className="label">Engin *</label>
-                  <input className="input text-sm" placeholder="Niveleuse, Compacteur, JCB..." value={jourForm.designation}
+                  <input className="input text-sm" list="engins-list-charges" placeholder="Sélectionner ou saisir..." value={jourForm.designation}
                     onChange={e => setJourForm(f => ({ ...f, designation: e.target.value }))} />
+                  <datalist id="engins-list-charges">
+                    {ENGINS_PREDEFINIS.map(e => <option key={e} value={e} />)}
+                  </datalist>
                 </div>
               )}
               {jourForm.categorie === 'achat_materiaux' && (
