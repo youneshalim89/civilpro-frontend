@@ -37,7 +37,7 @@ export default function FacturesPage() {
     onError:    () => toast.error('Erreur lors de l\'annulation'),
   });
 
-  const totaux = data?.totaux;
+  const totaux = (data as any)?.totaux;
   const factures: Facture[] = data?.data || [];
 
   return (

@@ -72,7 +72,7 @@ export default function NouvelleCommandePage() {
         article_id:    articleId,
         designation:   art.designation,
         unite:         art.unite,
-        prix_unitaire: parseFloat(art.prix_unitaire),
+        prix_unitaire: Number(art.prix_unitaire),
       } : l));
     } else {
       setLigneField(i, 'article_id', articleId);

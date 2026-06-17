@@ -143,7 +143,7 @@ export default function MarchesPage() {
         </div>
 
         {/* Pagination */}
-        {data?.pagination && data.pagination.pages > 1 && (
+        {data?.pagination && (data.pagination.pages ?? 0) > 1 && (
           <div className="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-500">
             <span>{data.pagination.total} marchés</span>
             <div className="flex gap-2">
@@ -155,7 +155,7 @@ export default function MarchesPage() {
               <span className="px-3 py-1.5">{page} / {data.pagination.pages}</span>
               <button
                 onClick={() => setPage(p => p + 1)}
-                disabled={page >= data.pagination.pages}
+                disabled={page >= (data.pagination.pages ?? page + 1)}
                 className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
               >Suivant</button>
             </div>

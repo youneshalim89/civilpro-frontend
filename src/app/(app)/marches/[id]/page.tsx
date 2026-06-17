@@ -50,7 +50,7 @@ export default function MarcheDetailPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">{marche.numero_marche}</h1>
               <span className={`badge ${statut?.color}`}>{statut?.label}</span>
-              {marche.jours_restants !== null && marche.jours_restants <= 30 && (
+              {marche.jours_restants != null && marche.jours_restants <= 30 && (
                 <span className="badge bg-red-100 text-red-700 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" /> {marche.jours_restants}j restants
                 </span>

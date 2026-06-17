@@ -23,13 +23,13 @@ export default function ModifierMarchePage() {
         objet:                   m.objet || '',
         maitre_ouvrage:          m.maitre_ouvrage || '',
         entreprise_attributaire: m.entreprise_attributaire || '',
-        montant_initial:         parseFloat(m.montant_initial) || 0,
+        montant_initial:         Number(m.montant_initial) || 0,
         date_commencement:       m.date_commencement?.split('T')[0] || '',
         delai_contractuel:       m.delai_contractuel || 365,
-        taux_tva:                parseFloat(m.taux_tva) || 20,
-        taux_retenue_garantie:   parseFloat(m.taux_retenue_garantie) || 7,
+        taux_tva:                Number(m.taux_tva) || 20,
+        taux_retenue_garantie:   Number(m.taux_retenue_garantie) || 7,
         statut:                  m.statut || 'en_cours',
-        avancement_physique:     parseFloat(m.avancement_physique) || 0,
+        avancement_physique:     Number(m.avancement_physique) || 0,
       });
     }).catch(() => toast.error('Marché introuvable'))
       .finally(() => setLoading(false));

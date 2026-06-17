@@ -70,10 +70,15 @@ export interface Marche {
   chef_marche_nom?: string;
   bq_total?: number;
   nb_articles?: number;
+  nb_commandes?: number;
+  nb_factures?: number;
+  nb_documents?: number;
+  dernier_decompte?: string;
   total_commandes?: number;
   total_facture?: number;
   total_paye?: number;
   jours_restants?: number;
+  jours_ecoules?: number;
   created_at: string;
 }
 
@@ -97,6 +102,9 @@ export interface Commande {
   marche_id: string;
   fournisseur_id?: string;
   fournisseur_nom?: string;
+  fournisseur_email?: string;
+  numero_marche?: string;
+  marche_objet?: string;
   date_commande: string;
   date_livraison_prevue?: string;
   statut: string;
@@ -123,8 +131,14 @@ export interface Facture {
   numero_facture: string;
   marche_id: string;
   commande_id?: string;
+  commande_numero?: string;
+  marche_numero?: string;
   date_facture: string;
   date_echeance?: string;
+  date_paiement?: string;
+  reference_paiement?: string;
+  date_validation?: string;
+  validated_by_nom?: string;
   statut: 'brouillon' | 'validee' | 'payee' | 'annulee' | 'contestee';
   montant_ht: number;
   taux_tva: number;

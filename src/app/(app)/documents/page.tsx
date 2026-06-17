@@ -172,7 +172,7 @@ export default function DocumentsPage() {
             <div className="px-5 py-3 bg-gray-50 border-b flex items-center gap-2">
               <Filter className="w-3.5 h-3.5 text-gray-400" />
               <h3 className="font-semibold text-gray-700 text-sm">{typeLabel}</h3>
-              <span className="badge bg-gray-200 text-gray-600 ml-1">{items.length}</span>
+              <span className="badge bg-gray-200 text-gray-600 ml-1">{(items as any[]).length}</span>
             </div>
             <div className="divide-y">
               {(items as any[]).map((doc) => (

@@ -44,7 +44,7 @@ export default function ArticlesPage() {
     a.href = url; a.download = `BQ-${marchesRes?.numero_marche}.csv`; a.click();
   };
 
-  const totaux = data?.totaux;
+  const totaux = (data as any)?.totaux;
   const articles: ArticleMarche[] = data?.data || [];
 
   return (

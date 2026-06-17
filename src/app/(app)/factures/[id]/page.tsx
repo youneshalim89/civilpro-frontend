@@ -54,7 +54,7 @@ export default function FactureDetailPage() {
 
   const f       = data;
   const statut  = STATUTS_FACTURE[f.statut];
-  const solde   = (parseFloat(f.montant_ttc)||0) - (parseFloat(f.montant_paye)||0);
+  const solde   = (Number(f.montant_ttc)||0) - (Number(f.montant_paye)||0);
 
   return (
     <div className="space-y-5 max-w-5xl">
@@ -125,7 +125,7 @@ export default function FactureDetailPage() {
       </div>
 
       {/* Lignes */}
-      {f.lignes?.length > 0 && (
+      {(f.lignes?.length ?? 0) > 0 && (
         <div className="card overflow-hidden">
           <div className="px-5 py-4 border-b">
             <h3 className="font-semibold text-gray-800">Lignes de facturation</h3>
@@ -142,7 +142,7 @@ export default function FactureDetailPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {f.lignes.map((l: any, i: number) => (
+                {(f.lignes ?? []).map((l: any, i: number) => (
                   <tr key={l.id || i} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{l.designation}</td>
                     <td className="table-cell text-gray-500">{l.unite || '—'}</td>
@@ -183,15 +183,15 @@ export default function FactureDetailPage() {
               </div>
             ))}
             {/* Barre progression paiement */}
-            {parseFloat(f.montant_ttc) > 0 && (
+            {Number(f.montant_ttc) > 0 && (
               <div className="mt-2">
                 <div className="flex justify-between text-xs text-gray-400 mb-1">
                   <span>Progression paiement</span>
-                  <span>{fmt.pct((parseFloat(f.montant_paye)||0) / parseFloat(f.montant_ttc) * 100)}</span>
+                  <span>{fmt.pct((Number(f.montant_paye)||0) / Number(f.montant_ttc) * 100)}</span>
                 </div>
                 <div className="h-2 bg-gray-200 rounded-full">
                   <div className="h-2 bg-green-500 rounded-full transition-all"
-                    style={{ width: `${Math.min(100, (parseFloat(f.montant_paye)||0) / parseFloat(f.montant_ttc) * 100)}%` }} />
+                    style={{ width: `${Math.min(100, (Number(f.montant_paye)||0) / Number(f.montant_ttc) * 100)}%` }} />
                 </div>
               </div>
             )}
