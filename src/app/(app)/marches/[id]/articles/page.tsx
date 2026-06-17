@@ -57,6 +57,26 @@ export default function ArticlesPage() {
   const normKey = (k: string) => k.toString().trim().toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
+  const parseNum = (v: any): number => {
+    if (typeof v === 'number') return v;
+    if (v == null || v === '') return 0;
+    let s = String(v).trim();
+    if (/^[\d.\s]+,\d+$/.test(s)) s = s.replace(/[.\s]/g, '').replace(',', '.'); // format FR: 4.136,00
+    else s = s.replace(/\s/g, '').replace(/,/g, ''); // format EN: 4,136.00
+    return parseFloat(s) || 0;
+  };
+
+  // Classification des colonnes par mots-clés (tolère "N° prix", "PU HT", "Désignation"...)
+  const classifyColumn = (key: string): keyof ImportRow | 'montant' | null => {
+    if (key.includes('design') || key.includes('libelle') || key.includes('desc')) return 'designation';
+    if (key.includes('unit')) return 'unite';
+    if (key.includes('quantit') || key === 'qte' || key === 'qty') return 'quantite_prevue';
+    if (key.includes('montant') || key.includes('total')) return 'montant';
+    if (key.includes('code') || key.includes('nprix') || key.includes('nordre') || key.includes('numero') || key === 'n' || key === 'no') return 'code_article';
+    if (key.includes('pu') || key.includes('prix')) return 'prix_unitaire';
+    return null;
+  };
+
   const handleFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -66,23 +86,20 @@ export default function ArticlesPage() {
         const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
         const parsed: ImportRow[] = rows.map((row) => {
-          const norm: Record<string, any> = {};
-          Object.keys(row).forEach(k => { norm[normKey(k)] = row[k]; });
-          const get = (...keys: string[]) => {
-            for (const k of keys) if (norm[k] !== undefined && norm[k] !== '') return norm[k];
-            return '';
-          };
-          return {
-            code_article:    String(get('code', 'codearticle', 'code_article', 'n', 'no', 'numero')),
-            designation:     String(get('designation', 'libelle', 'desigation', 'description')),
-            unite:           String(get('unite', 'unit', 'u')),
-            quantite_prevue: parseFloat(get('quantiteprevue', 'quantite', 'qte', 'qty')) || 0,
-            prix_unitaire:   parseFloat(get('prixunitaire', 'prixunit', 'pu', 'prix')) || 0,
-          };
-        }).filter(r => r.code_article && r.designation);
+          const out: any = { code_article: '', designation: '', unite: '', quantite_prevue: 0, prix_unitaire: 0 };
+          Object.keys(row).forEach((rawKey) => {
+            const field = classifyColumn(normKey(rawKey));
+            if (!field || field === 'montant') return;
+            const val = row[rawKey];
+            if (field === 'quantite_prevue' || field === 'prix_unitaire') out[field] = parseNum(val);
+            else out[field] = String(val ?? '').trim();
+          });
+          return out as ImportRow;
+        }).filter(r => r.designation && (r.quantite_prevue > 0 || r.prix_unitaire > 0))
+          .map((r, i) => ({ ...r, code_article: r.code_article || String(i + 1), unite: r.unite || 'u' }));
 
         if (!parsed.length) {
-          toast.error('Aucune ligne valide détectée. Vérifiez les colonnes (Code, Désignation, Unité, Quantité, Prix unitaire).');
+          toast.error('Aucune ligne valide détectée. Vérifiez les colonnes (Désignation, Unité, Quantité, Prix unitaire).');
           return;
         }
         setImportRows(parsed);
