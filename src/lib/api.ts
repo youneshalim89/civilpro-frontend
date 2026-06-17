@@ -189,6 +189,35 @@ export interface LigneSituation {
   pourcentage: number;
 }
 
+export interface ChargeMensuelle {
+  id: string;
+  marche_id: string;
+  mois: string;
+  masse_salariale: number;
+  carburant: number;
+  hebergement: number;
+  restauration: number;
+  reparations: number;
+  pneumatiques: number;
+  transport: number;
+  sous_traitance: number;
+  divers: number;
+  objectif_mensuel: number;
+  notes?: string;
+}
+
+export interface JournalMateriel {
+  id: string;
+  marche_id: string;
+  date_jour: string;
+  engin: string;
+  heures_travaillees: number;
+  gasoil_consomme: number;
+  statut: 'operationnel' | 'panne' | 'entretien' | 'arret';
+  observation?: string;
+  created_by_nom?: string;
+}
+
 // ── Services API ──────────────────────────────────────────────
 
 export const authService = {
@@ -248,6 +277,18 @@ export const situationsService = {
   create:   (data: any)                 => api.post<ApiResponse<Situation>>('/situations', data),
   statut:   (id: string, data: any)     => api.patch(`/situations/${id}/statut`, data),
   recap:    (marcheId: string)          => api.get(`/situations/recap/${marcheId}`),
+};
+
+export const chargesService = {
+  list:   (marcheId: string)            => api.get<ApiResponse<ChargeMensuelle[]>>(`/marches/${marcheId}/charges`),
+  save:   (marcheId: string, data: any) => api.post<ApiResponse<ChargeMensuelle>>(`/marches/${marcheId}/charges`, data),
+  delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/charges/${id}`),
+};
+
+export const materielService = {
+  list:   (marcheId: string)            => api.get<ApiResponse<JournalMateriel[]>>(`/marches/${marcheId}/materiel`),
+  create: (marcheId: string, data: any) => api.post<ApiResponse<JournalMateriel>>(`/marches/${marcheId}/materiel`, data),
+  delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/materiel/${id}`),
 };
 
 export const documentsService = {

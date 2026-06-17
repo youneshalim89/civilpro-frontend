@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Edit2, FileText, ShoppingCart, Receipt,
   BarChart3, Package, FolderOpen, HardHat, AlertCircle, FileDown,
+  Wallet, Truck,
 } from 'lucide-react';
 import { marchesService } from '@/lib/api';
 import { fmt, STATUTS_MARCHE } from '@/lib/utils';
@@ -37,6 +38,8 @@ export default function MarcheDetailPage() {
     { label: 'Situations',          href: `/situations?marche_id=${id}`,icon: BarChart3,    count: marche.dernier_decompte },
     { label: 'Documents',           href: `/documents?marche_id=${id}`, icon: FolderOpen,   count: marche.nb_documents },
     { label: 'Planning / Chantier', href: `/marches/${id}/chantier`,    icon: HardHat,      count: null },
+    { label: 'Charges mensuelles',  href: `/marches/${id}/charges`,     icon: Wallet,       count: null },
+    { label: 'Journal matériel',    href: `/marches/${id}/materiel`,    icon: Truck,        count: null },
   ];
 
   return (
