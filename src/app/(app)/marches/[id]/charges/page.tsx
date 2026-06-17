@@ -23,6 +23,12 @@ const CHAMPS: { key: keyof ChargeMensuelle; label: string }[] = [
 
 const TYPES_MATERIAUX = ['G1', 'G2', 'G3', 'Sable', 'Tout-venant', 'Gravette', 'Grave concassée', 'Ciment', 'Autre'];
 
+const UNITE_PAR_MATERIAU: Record<string, string> = {
+  'Ciment': 'tonnes',
+  'G1': 'm³', 'G2': 'm³', 'G3': 'm³',
+  'Sable': 'm³', 'Tout-venant': 'm³', 'Gravette': 'm³', 'Grave concassée': 'm³',
+};
+
 const ENGINS_PREDEFINIS = [
   'MAN 8x4',
   'Pelle hydraulique sur pneu 318',
@@ -238,7 +244,10 @@ export default function ChargesPage() {
                 <div className="xl:col-span-2">
                   <label className="label">Type matériau *</label>
                   <input className="input text-sm" list="types-materiaux" placeholder="G1, G2, Sable..." value={jourForm.designation}
-                    onChange={e => setJourForm(f => ({ ...f, designation: e.target.value }))} />
+                    onChange={e => setJourForm(f => ({
+                      ...f, designation: e.target.value,
+                      unite: UNITE_PAR_MATERIAU[e.target.value] || f.unite,
+                    }))} />
                   <datalist id="types-materiaux">
                     {TYPES_MATERIAUX.map(t => <option key={t} value={t} />)}
                   </datalist>
