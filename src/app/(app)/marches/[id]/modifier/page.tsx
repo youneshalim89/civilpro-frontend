@@ -1,0 +1,168 @@
+'use client';
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { marchesService } from '@/lib/api';
+
+const STATUTS = ['en_attente','en_cours','acheve','en_retard','resilie','suspendu'];
+
+export default function ModifierMarchePage() {
+  const router         = useRouter();
+  const { id }         = useParams<{ id: string }>();
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [form, setForm] = useState<any>({});
+
+  useEffect(() => {
+    marchesService.get(id).then(r => {
+      const m = r.data.data;
+      setForm({
+        numero_marche:           m.numero_marche || '',
+        objet:                   m.objet || '',
+        maitre_ouvrage:          m.maitre_ouvrage || '',
+        entreprise_attributaire: m.entreprise_attributaire || '',
+        montant_initial:         parseFloat(m.montant_initial) || 0,
+        date_commencement:       m.date_commencement?.split('T')[0] || '',
+        delai_contractuel:       m.delai_contractuel || 365,
+        taux_tva:                parseFloat(m.taux_tva) || 20,
+        taux_retenue_garantie:   parseFloat(m.taux_retenue_garantie) || 7,
+        statut:                  m.statut || 'en_cours',
+        avancement_physique:     parseFloat(m.avancement_physique) || 0,
+      });
+    }).catch(() => toast.error('Marché introuvable'))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setForm((f: any) => ({ ...f, [k]: e.target.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value }));
+
+  const dateFin = () => {
+    if (!form.date_commencement || !form.delai_contractuel) return '—';
+    const d = new Date(form.date_commencement);
+    d.setDate(d.getDate() + Number(form.delai_contractuel));
+    return d.toLocaleDateString('fr-FR');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await marchesService.update(id, form);
+      toast.success('Marché mis à jour');
+      router.push(`/marches/${id}`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Erreur lors de la mise à jour');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="animate-pulse space-y-4"><div className="h-8 bg-gray-200 rounded w-1/3" /><div className="card h-64 bg-gray-100" /></div>;
+
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <div className="flex items-center gap-4">
+        <Link href={`/marches/${id}`} className="p-2 hover:bg-gray-100 rounded-lg">
+          <ArrowLeft className="w-5 h-5 text-gray-500" />
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Modifier le marché</h1>
+          <p className="text-sm text-gray-500">{form.numero_marche}</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Identification */}
+        <div className="card p-5">
+          <h3 className="font-semibold text-gray-800 mb-4">Identification</h3>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Numéro du marché *</label>
+              <input className="input" value={form.numero_marche || ''} onChange={set('numero_marche')} required />
+            </div>
+            <div>
+              <label className="label">Maître d'ouvrage *</label>
+              <input className="input" value={form.maitre_ouvrage || ''} onChange={set('maitre_ouvrage')} required />
+            </div>
+            <div className="xl:col-span-2">
+              <label className="label">Objet *</label>
+              <textarea className="input" rows={3} value={form.objet || ''} onChange={set('objet')} required />
+            </div>
+            <div>
+              <label className="label">Entreprise attributaire</label>
+              <input className="input" value={form.entreprise_attributaire || ''} onChange={set('entreprise_attributaire')} />
+            </div>
+            <div>
+              <label className="label">Statut</label>
+              <select className="input" value={form.statut || ''} onChange={set('statut')}>
+                {STATUTS.map(s => (
+                  <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Financier */}
+        <div className="card p-5">
+          <h3 className="font-semibold text-gray-800 mb-4">Données financières</h3>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div>
+              <label className="label">Montant HT (MAD)</label>
+              <input type="number" step="0.01" min={0} className="input"
+                value={form.montant_initial || 0} onChange={set('montant_initial')} />
+            </div>
+            <div>
+              <label className="label">Taux TVA (%)</label>
+              <input type="number" step="0.01" min={0} max={100} className="input"
+                value={form.taux_tva || 0} onChange={set('taux_tva')} />
+            </div>
+            <div>
+              <label className="label">Retenue de garantie (%)</label>
+              <input type="number" step="0.01" min={0} max={100} className="input"
+                value={form.taux_retenue_garantie || 0} onChange={set('taux_retenue_garantie')} />
+            </div>
+          </div>
+        </div>
+
+        {/* Délais + Avancement */}
+        <div className="card p-5">
+          <h3 className="font-semibold text-gray-800 mb-4">Délais & Avancement</h3>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div>
+              <label className="label">Date de commencement</label>
+              <input type="date" className="input" value={form.date_commencement || ''}
+                onChange={set('date_commencement')} />
+            </div>
+            <div>
+              <label className="label">Délai contractuel (jours)</label>
+              <input type="number" min={1} className="input"
+                value={form.delai_contractuel || 365} onChange={set('delai_contractuel')} />
+            </div>
+            <div>
+              <label className="label">Date fin prévue (calculée)</label>
+              <div className="input bg-gray-50 text-gray-700">{dateFin()}</div>
+            </div>
+            <div className="xl:col-span-3">
+              <label className="label">
+                Avancement physique : <span className="font-bold text-brand-600">{form.avancement_physique || 0}%</span>
+              </label>
+              <input type="range" min={0} max={100} step={0.5} className="w-full accent-brand-500"
+                value={form.avancement_physique || 0} onChange={set('avancement_physique')} />
+              <div className="flex justify-between text-xs text-gray-400 mt-1"><span>0%</span><span>50%</span><span>100%</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button type="submit" disabled={saving} className="btn-primary">
+            {saving ? 'Enregistrement...' : 'Enregistrer les modifications'}
+          </button>
+          <Link href={`/marches/${id}`} className="btn-secondary">Annuler</Link>
+        </div>
+      </form>
+    </div>
+  );
+}
