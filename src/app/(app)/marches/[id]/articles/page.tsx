@@ -81,16 +81,32 @@ export default function ArticlesPage() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const wb = XLSX.read(e.target?.result, { type: 'binary' });
+        const data = e.target?.result;
+        const wb = XLSX.read(data, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false });
 
-        const parsed: ImportRow[] = rows.map((row) => {
+        // Trouver la ligne d'en-tête : celle qui contient le plus de colonnes reconnues
+        let headerIdx = -1, bestScore = 0;
+        const maxScan = Math.min(grid.length, 15);
+        for (let i = 0; i < maxScan; i++) {
+          const score = grid[i].filter(cell => classifyColumn(normKey(String(cell)))).length;
+          if (score > bestScore) { bestScore = score; headerIdx = i; }
+        }
+
+        if (headerIdx === -1 || bestScore < 2) {
+          toast.error('En-têtes non reconnus. Colonnes attendues : Désignation, Unité, Quantité, Prix unitaire.');
+          return;
+        }
+
+        const headerRow = grid[headerIdx].map((h: any) => classifyColumn(normKey(String(h))));
+        const dataRows = grid.slice(headerIdx + 1);
+
+        const parsed: ImportRow[] = dataRows.map((cells) => {
           const out: any = { code_article: '', designation: '', unite: '', quantite_prevue: 0, prix_unitaire: 0 };
-          Object.keys(row).forEach((rawKey) => {
-            const field = classifyColumn(normKey(rawKey));
+          headerRow.forEach((field, ci) => {
             if (!field || field === 'montant') return;
-            const val = row[rawKey];
+            const val = cells[ci];
             if (field === 'quantite_prevue' || field === 'prix_unitaire') out[field] = parseNum(val);
             else out[field] = String(val ?? '').trim();
           });
@@ -107,7 +123,7 @@ export default function ArticlesPage() {
         toast.error('Impossible de lire ce fichier');
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const confirmImport = async () => {
