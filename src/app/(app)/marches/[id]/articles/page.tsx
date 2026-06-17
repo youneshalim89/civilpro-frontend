@@ -1,20 +1,26 @@
 'use client';
 // src/app/(app)/marches/[id]/articles/page.tsx — Bordereau des prix
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Edit2, Trash2, Download } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, Download, Upload, X, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 import { articlesService, marchesService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
 import type { ArticleMarche } from '@/lib/api';
+
+type ImportRow = { code_article: string; designation: string; unite: string; quantite_prevue: number; prix_unitaire: number };
 
 export default function ArticlesPage() {
   const { id } = useParams<{ id: string }>();
   const qc     = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing]   = useState<ArticleMarche | null>(null);
+  const [importRows, setImportRows] = useState<ImportRow[] | null>(null);
+  const [importing, setImporting]   = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: marchesRes } = useQuery({
     queryKey: ['marche', id],
@@ -47,6 +53,61 @@ export default function ArticlesPage() {
   const totaux = (data as any)?.totaux;
   const articles: ArticleMarche[] = data?.data || [];
 
+  // ── Import Excel/CSV du bordereau ─────────────────────────────
+  const normKey = (k: string) => k.toString().trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+
+  const handleFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target?.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+        const parsed: ImportRow[] = rows.map((row) => {
+          const norm: Record<string, any> = {};
+          Object.keys(row).forEach(k => { norm[normKey(k)] = row[k]; });
+          const get = (...keys: string[]) => {
+            for (const k of keys) if (norm[k] !== undefined && norm[k] !== '') return norm[k];
+            return '';
+          };
+          return {
+            code_article:    String(get('code', 'codearticle', 'code_article', 'n', 'no', 'numero')),
+            designation:     String(get('designation', 'libelle', 'desigation', 'description')),
+            unite:           String(get('unite', 'unit', 'u')),
+            quantite_prevue: parseFloat(get('quantiteprevue', 'quantite', 'qte', 'qty')) || 0,
+            prix_unitaire:   parseFloat(get('prixunitaire', 'prixunit', 'pu', 'prix')) || 0,
+          };
+        }).filter(r => r.code_article && r.designation);
+
+        if (!parsed.length) {
+          toast.error('Aucune ligne valide détectée. Vérifiez les colonnes (Code, Désignation, Unité, Quantité, Prix unitaire).');
+          return;
+        }
+        setImportRows(parsed);
+      } catch {
+        toast.error('Impossible de lire ce fichier');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const confirmImport = async () => {
+    if (!importRows) return;
+    setImporting(true);
+    try {
+      await articlesService.batch(id, importRows);
+      toast.success(`${importRows.length} articles importés`);
+      qc.invalidateQueries({ queryKey: ['articles', id] });
+      setImportRows(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Erreur lors de l\'import');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-4">
@@ -57,6 +118,11 @@ export default function ArticlesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Bordereau des Prix</h1>
           <p className="text-sm text-gray-500">{marchesRes?.numero_marche} — {marchesRes?.objet}</p>
         </div>
+        <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
+        <button onClick={() => fileInputRef.current?.click()} className="btn-secondary text-sm flex items-center gap-2">
+          <Upload className="w-4 h-4" /> Importer Excel/CSV
+        </button>
         <button onClick={exportCSV} className="btn-secondary text-sm flex items-center gap-2">
           <Download className="w-4 h-4" /> Exporter CSV
         </button>
@@ -64,6 +130,52 @@ export default function ArticlesPage() {
           <Plus className="w-4 h-4" /> Ajouter article
         </button>
       </div>
+
+      {/* Modal prévisualisation import */}
+      {importRows && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Aperçu de l'import — {importRows.length} ligne(s)</h3>
+              <button onClick={() => setImportRows(null)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-0">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b sticky top-0">
+                  <tr>
+                    <th className="table-header">Code</th>
+                    <th className="table-header">Désignation</th>
+                    <th className="table-header">Unité</th>
+                    <th className="table-header text-right">Quantité</th>
+                    <th className="table-header text-right">Prix unitaire</th>
+                    <th className="table-header text-right">Montant</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {importRows.map((r, i) => (
+                    <tr key={i}>
+                      <td className="table-cell font-mono text-xs">{r.code_article}</td>
+                      <td className="table-cell">{r.designation}</td>
+                      <td className="table-cell">{r.unite}</td>
+                      <td className="table-cell text-right">{fmt.number(r.quantite_prevue)}</td>
+                      <td className="table-cell text-right">{fmt.currency(r.prix_unitaire)}</td>
+                      <td className="table-cell text-right font-medium">{fmt.currency(r.quantite_prevue * r.prix_unitaire)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 border-t flex justify-end gap-3">
+              <button onClick={() => setImportRows(null)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={confirmImport} disabled={importing} className="btn-primary text-sm flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" /> {importing ? 'Import en cours...' : `Importer ${importRows.length} lignes`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Totaux */}
       {totaux && (
