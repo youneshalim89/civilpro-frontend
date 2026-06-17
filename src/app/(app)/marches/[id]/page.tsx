@@ -5,10 +5,11 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Edit2, FileText, ShoppingCart, Receipt,
-  BarChart3, Package, FolderOpen, HardHat, AlertCircle,
+  BarChart3, Package, FolderOpen, HardHat, AlertCircle, FileDown,
 } from 'lucide-react';
 import { marchesService } from '@/lib/api';
 import { fmt, STATUTS_MARCHE } from '@/lib/utils';
+import { exportMarchePDF } from '@/lib/pdf';
 
 export default function MarcheDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -59,9 +60,14 @@ export default function MarcheDetailPage() {
             <p className="text-gray-600 mt-1">{marche.objet}</p>
           </div>
         </div>
-        <Link href={`/marches/${id}/modifier`} className="btn-secondary text-sm flex items-center gap-2">
-          <Edit2 className="w-4 h-4" /> Modifier
-        </Link>
+        <div className="flex items-center gap-2">
+          <button onClick={() => exportMarchePDF(marche)} className="btn-secondary text-sm flex items-center gap-2">
+            <FileDown className="w-4 h-4" /> PDF
+          </button>
+          <Link href={`/marches/${id}/modifier`} className="btn-secondary text-sm flex items-center gap-2">
+            <Edit2 className="w-4 h-4" /> Modifier
+          </Link>
+        </div>
       </div>
 
       {/* Infos principales */}

@@ -82,6 +82,124 @@ function infoGrid(doc: jsPDF, items: [string, string][], startY: number, cols = 
   return y;
 }
 
+// ─── Export générique de liste/tableau ─────────────────────────────────────────
+export function exportListPDF(opts: {
+  title: string;
+  subtitle: string;
+  filename: string;
+  head: string[];
+  body: (string | number)[][];
+  rightAlignCols?: number[];
+}) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const y   = addHeader(doc, opts.title, opts.subtitle);
+
+  const columnStyles: Record<number, any> = {};
+  (opts.rightAlignCols || []).forEach(i => { columnStyles[i] = { halign: 'right' }; });
+
+  autoTable(doc, {
+    startY:     y + 4,
+    head:       [opts.head],
+    body:       opts.body,
+    headStyles: { fillColor: DARK, textColor: [255,255,255], fontSize: 8, fontStyle: 'bold' },
+    bodyStyles: { fontSize: 7.5 },
+    alternateRowStyles: { fillColor: GRAY_LIGHT },
+    columnStyles,
+    margin:     { left: 14, right: 14 },
+  });
+
+  addFooter(doc);
+  doc.save(opts.filename);
+}
+
+// ─── Fiche Marché PDF ───────────────────────────────────────────────────────
+export function exportMarchePDF(marche: any) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  let y = addHeader(doc, 'FICHE MARCHÉ', marche.numero_marche);
+
+  doc.setFillColor(...GRAY_LIGHT);
+  doc.rect(14, y, doc.internal.pageSize.getWidth() - 28, 60, 'F');
+  y = infoGrid(doc, [
+    ['Objet',                    marche.objet],
+    ['Maître d\'ouvrage',        marche.maitre_ouvrage],
+    ['Entreprise attributaire',  marche.entreprise_attributaire],
+    ['Chef de marché',           marche.chef_marche_nom || '—'],
+    ['Statut',                   marche.statut?.toUpperCase()],
+    ['Date commencement',        fmtDate(marche.date_commencement)],
+    ['Délai contractuel',        `${marche.delai_contractuel} jours`],
+    ['Date fin prévue',          fmtDate(marche.date_fin_prevue)],
+    ['Taux TVA',                 `${marche.taux_tva} %`],
+    ['Retenue de garantie',      `${marche.taux_retenue_garantie} %`],
+  ], y + 4, 2);
+  y += 10;
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...BRAND_ORANGE);
+  doc.text('Indicateurs financiers', 14, y);
+  y += 6;
+
+  autoTable(doc, {
+    startY:     y,
+    head:       [['Indicateur', 'Valeur']],
+    body:       [
+      ['Montant initial',    fmtMAD(marche.montant_initial)],
+      ['Montant actualisé',  fmtMAD(marche.montant_actualise || marche.montant_initial)],
+      ['Total commandé',     fmtMAD(marche.total_commandes || 0)],
+      ['Total facturé',      fmtMAD(marche.total_facture || 0)],
+      ['Total payé',         fmtMAD(marche.total_paye || 0)],
+      ['Avancement physique',  fmtPct(marche.avancement_physique)],
+      ['Avancement financier', fmtPct(marche.avancement_financier)],
+    ],
+    headStyles: { fillColor: DARK, textColor: [255,255,255], fontSize: 8, fontStyle: 'bold' },
+    bodyStyles: { fontSize: 8 },
+    alternateRowStyles: { fillColor: GRAY_LIGHT },
+    columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+    margin: { left: 14, right: 14 },
+  });
+
+  addFooter(doc);
+  doc.save(`Marche_${marche.numero_marche}.pdf`);
+}
+
+// ─── Fiche Commande PDF ─────────────────────────────────────────────────────
+export function exportCommandePDF(commande: any) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  let y = addHeader(doc, 'BON DE COMMANDE', commande.numero_commande);
+
+  doc.setFillColor(...GRAY_LIGHT);
+  doc.rect(14, y, doc.internal.pageSize.getWidth() - 28, 36, 'F');
+  y = infoGrid(doc, [
+    ['Marché',            commande.numero_marche || '—'],
+    ['Fournisseur',       commande.fournisseur_nom || '—'],
+    ['Statut',            commande.statut?.toUpperCase()],
+    ['Date commande',     fmtDate(commande.date_commande)],
+    ['Livraison prévue',  fmtDate(commande.date_livraison_prevue)],
+    ['Livraison réelle',  fmtDate(commande.date_livraison_reelle)],
+  ], y + 4, 2);
+  y += 8;
+
+  if (commande.lignes?.length) {
+    autoTable(doc, {
+      startY:     y,
+      head:       [['Désignation', 'Unité', 'Quantité', 'P.U.', 'Montant']],
+      body:       commande.lignes.map((l: any) => [
+        l.designation, l.unite || '—', l.quantite, fmtMAD(l.prix_unitaire), fmtMAD(l.montant),
+      ]),
+      headStyles: { fillColor: DARK, textColor: [255,255,255], fontSize: 8, fontStyle: 'bold' },
+      bodyStyles: { fontSize: 8 },
+      alternateRowStyles: { fillColor: GRAY_LIGHT },
+      columnStyles: { 0: { cellWidth: 80 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+      foot:       [['', '', '', 'TOTAL TTC', fmtMAD(commande.total_ttc)]],
+      footStyles: { fillColor: BRAND_ORANGE, textColor: [255,255,255], fontStyle: 'bold', fontSize: 8 },
+      margin:     { left: 14, right: 14 },
+    });
+  }
+
+  addFooter(doc);
+  doc.save(`Commande_${commande.numero_commande}.pdf`);
+}
+
 // ─── Facture PDF ──────────────────────────────────────────────────────────────
 export function exportFacturePDF(facture: any) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });

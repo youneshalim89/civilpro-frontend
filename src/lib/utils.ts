@@ -31,6 +31,19 @@ export const fmt = {
   },
 };
 
+export function exportCSV(filename: string, header: string[], rows: (string | number)[][]) {
+  const escape = (v: string | number) => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv  = [header, ...rows].map(row => row.map(escape).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 export const STATUTS_MARCHE: Record<string, { label: string; color: string }> = {
   en_attente: { label: 'En attente',   color: 'bg-gray-100 text-gray-700' },
   en_cours:   { label: 'En cours',     color: 'bg-blue-100 text-blue-700' },

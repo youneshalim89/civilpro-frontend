@@ -2,10 +2,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Truck, Receipt, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Truck, Receipt, CheckCircle, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { commandesService, facturesService } from '@/lib/api';
 import { fmt, STATUTS_COMMANDE } from '@/lib/utils';
+import { exportCommandePDF } from '@/lib/pdf';
 
 const NEXT_STATUTS: Record<string, string[]> = {
   en_attente:         ['confirmee', 'annulee'],
@@ -65,6 +66,9 @@ export default function CommandeDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => exportCommandePDF(commande)} className="btn-secondary text-sm flex items-center gap-2">
+            <FileDown className="w-4 h-4" /> PDF
+          </button>
           {nextSteps.map(next => (
             <button key={next} onClick={() => statutMut.mutate(next)}
               className={next === 'annulee' ? 'btn-secondary text-sm text-red-600' : 'btn-secondary text-sm'}>

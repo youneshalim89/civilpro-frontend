@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Plus, Search, Filter, Eye, Edit2, TrendingUp } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit2, TrendingUp, FileDown, Download } from 'lucide-react';
 import { marchesService } from '@/lib/api';
-import { fmt, STATUTS_MARCHE } from '@/lib/utils';
+import { fmt, STATUTS_MARCHE, exportCSV } from '@/lib/utils';
+import { exportListPDF } from '@/lib/pdf';
 import type { Marche } from '@/lib/api';
 
 export default function MarchesPage() {
@@ -18,6 +19,23 @@ export default function MarchesPage() {
     queryFn:  () => marchesService.list({ search, statut, page, limit: 15 }).then(r => r.data),
   });
 
+  const marches: Marche[] = data?.data || [];
+
+  const handleExportCSV = () => {
+    exportCSV('Marches.csv',
+      ['N° Marché','Objet','Maître d\'ouvrage','Montant initial','Avancement %','Échéance','Statut'],
+      marches.map(m => [m.numero_marche, m.objet, m.maitre_ouvrage, m.montant_initial, m.avancement_physique, fmt.date(m.date_fin_prevue), STATUTS_MARCHE[m.statut]?.label || m.statut]));
+  };
+
+  const handleExportPDF = () => {
+    exportListPDF({
+      title: 'MARCHÉS', subtitle: `${marches.length} marché(s)`, filename: 'Marches.pdf',
+      head: ['N° Marché','Objet','Maître d\'ouvrage','Montant initial','Avancement','Échéance','Statut'],
+      body: marches.map(m => [m.numero_marche, m.objet, m.maitre_ouvrage, fmt.currency(m.montant_initial), fmt.pct(m.avancement_physique), fmt.date(m.date_fin_prevue), STATUTS_MARCHE[m.statut]?.label || m.statut]),
+      rightAlignCols: [3, 4],
+    });
+  };
+
   return (
     <div className="space-y-5">
       {/* En-tête */}
@@ -28,9 +46,17 @@ export default function MarchesPage() {
             {data?.pagination?.total ?? 0} marchés au total
           </p>
         </div>
-        <Link href="/marches/nouveau" className="btn-primary text-sm flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nouveau marché
-        </Link>
+        <div className="flex items-center gap-2">
+          <button onClick={handleExportCSV} className="btn-secondary text-sm flex items-center gap-2">
+            <Download className="w-4 h-4" /> CSV
+          </button>
+          <button onClick={handleExportPDF} className="btn-secondary text-sm flex items-center gap-2">
+            <FileDown className="w-4 h-4" /> PDF
+          </button>
+          <Link href="/marches/nouveau" className="btn-primary text-sm flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Nouveau marché
+          </Link>
+        </div>
       </div>
 
       {/* Filtres */}

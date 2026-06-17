@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Eye, Truck, X, CheckCircle } from 'lucide-react';
+import { Plus, Eye, Truck, X, CheckCircle, FileDown, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { commandesService } from '@/lib/api';
-import { fmt, STATUTS_COMMANDE } from '@/lib/utils';
+import { fmt, STATUTS_COMMANDE, exportCSV } from '@/lib/utils';
+import { exportListPDF } from '@/lib/pdf';
 import type { Commande } from '@/lib/api';
 
 const STATUTS_TRANSITION: Record<string, { label: string; next: string }[]> = {
@@ -49,6 +50,21 @@ export default function CommandesPage() {
   const totalHT  = commandes.reduce((s, c) => s + parseFloat(String(c.total_ht)),  0);
   const totalTTC = commandes.reduce((s, c) => s + parseFloat(String(c.total_ttc)), 0);
 
+  const handleExportCSV = () => {
+    exportCSV('Commandes.csv',
+      ['N° Commande','Fournisseur','Date','Livraison prévue','Total HT','Total TTC','Statut'],
+      commandes.map(c => [c.numero_commande, c.fournisseur_nom || '—', fmt.date(c.date_commande), fmt.date(c.date_livraison_prevue), c.total_ht, c.total_ttc, STATUTS_COMMANDE[c.statut]?.label || c.statut]));
+  };
+
+  const handleExportPDF = () => {
+    exportListPDF({
+      title: 'COMMANDES', subtitle: `${commandes.length} commande(s)`, filename: 'Commandes.pdf',
+      head: ['N° Commande','Fournisseur','Date','Livraison prévue','Total HT','Total TTC','Statut'],
+      body: commandes.map(c => [c.numero_commande, c.fournisseur_nom || '—', fmt.date(c.date_commande), fmt.date(c.date_livraison_prevue), fmt.currency(c.total_ht), fmt.currency(c.total_ttc), STATUTS_COMMANDE[c.statut]?.label || c.statut]),
+      rightAlignCols: [4, 5],
+    });
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -56,9 +72,17 @@ export default function CommandesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Commandes</h1>
           <p className="text-sm text-gray-500">{data?.pagination?.total ?? 0} commandes</p>
         </div>
-        <Link href="/commandes/nouvelle" className="btn-primary text-sm flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nouvelle commande
-        </Link>
+        <div className="flex items-center gap-2">
+          <button onClick={handleExportCSV} className="btn-secondary text-sm flex items-center gap-2">
+            <Download className="w-4 h-4" /> CSV
+          </button>
+          <button onClick={handleExportPDF} className="btn-secondary text-sm flex items-center gap-2">
+            <FileDown className="w-4 h-4" /> PDF
+          </button>
+          <Link href="/commandes/nouvelle" className="btn-primary text-sm flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Nouvelle commande
+          </Link>
+        </div>
       </div>
 
       {/* KPIs rapides */}

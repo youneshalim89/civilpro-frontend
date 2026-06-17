@@ -1,9 +1,10 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Package, AlertTriangle, TrendingDown, Plus, ArrowDown, ArrowUp } from 'lucide-react';
+import { Package, AlertTriangle, TrendingDown, Plus, ArrowDown, ArrowUp, FileDown, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { fmt } from '@/lib/utils';
+import { fmt, exportCSV } from '@/lib/utils';
+import { exportListPDF } from '@/lib/pdf';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '';
@@ -66,12 +67,35 @@ export default function StockPage() {
     finally { setSaving(false); }
   };
 
+  const handleExportCSV = () => {
+    exportCSV('Stock.csv',
+      ['Désignation','Catégorie','Type','Stock','Min','P.U. HT','Valeur','Niveau'],
+      materiaux.map(m => [m.designation, m.categorie_nom, m.categorie_type, m.quantite_stock, m.quantite_min, m.prix_unitaire_ht, m.quantite_stock * m.prix_unitaire_ht, m.niveau_stock]));
+  };
+
+  const handleExportPDF = () => {
+    exportListPDF({
+      title: 'STOCK', subtitle: `${materiaux.length} article(s)`, filename: 'Stock.pdf',
+      head: ['Désignation','Catégorie','Type','Stock','Min','P.U. HT','Valeur','Niveau'],
+      body: materiaux.map(m => [m.designation, m.categorie_nom, m.categorie_type, `${fmt.number(m.quantite_stock)} ${m.unite_mesure}`, `${m.quantite_min} ${m.unite_mesure}`, fmt.currency(m.prix_unitaire_ht), fmt.currency(m.quantite_stock * m.prix_unitaire_ht), m.niveau_stock]),
+      rightAlignCols: [3, 4, 5, 6],
+    });
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Gestion des Stocks</h1>
           <p className="text-sm text-gray-500">{materiaux.length} articles • Valeur totale : {fmt.currency(valeurTotale)}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={handleExportCSV} className="btn-secondary text-sm flex items-center gap-2">
+            <Download className="w-4 h-4" /> CSV
+          </button>
+          <button onClick={handleExportPDF} className="btn-secondary text-sm flex items-center gap-2">
+            <FileDown className="w-4 h-4" /> PDF
+          </button>
         </div>
       </div>
 
