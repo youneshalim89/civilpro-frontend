@@ -20,6 +20,7 @@ export default function ArticlesPage() {
   const [editing, setEditing]   = useState<ArticleMarche | null>(null);
   const [importRows, setImportRows] = useState<ImportRow[] | null>(null);
   const [importing, setImporting]   = useState(false);
+  const [importDebug, setImportDebug] = useState<{ header: string[]; mapped: (string|null)[]; sample: any[][] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: marchesRes } = useQuery({
@@ -115,9 +116,15 @@ export default function ArticlesPage() {
           .map((r, i) => ({ ...r, code_article: r.code_article || String(i + 1), unite: r.unite || 'u' }));
 
         if (!parsed.length) {
-          toast.error('Aucune ligne valide détectée. Vérifiez les colonnes (Désignation, Unité, Quantité, Prix unitaire).');
+          setImportDebug({
+            header: grid[headerIdx].map((h: any) => String(h)),
+            mapped: headerRow,
+            sample: dataRows.slice(0, 5),
+          });
+          toast.error('Aucune ligne valide détectée — voir le diagnostic ci-dessous.');
           return;
         }
+        setImportDebug(null);
         setImportRows(parsed);
       } catch {
         toast.error('Impossible de lire ce fichier');
@@ -163,6 +170,45 @@ export default function ArticlesPage() {
           <Plus className="w-4 h-4" /> Ajouter article
         </button>
       </div>
+
+      {/* Diagnostic import (si aucune ligne valide) */}
+      {importDebug && (
+        <div className="card p-5 border-red-200 border-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-red-700">Diagnostic de l'import — aucune ligne valide trouvée</h3>
+            <button onClick={() => setImportDebug(null)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+          <p className="text-sm text-gray-600 mb-3">
+            Ligne d'en-tête détectée et colonnes reconnues (null = colonne ignorée) :
+          </p>
+          <div className="overflow-x-auto mb-4">
+            <table className="text-xs border">
+              <tbody>
+                <tr className="bg-gray-50">
+                  {importDebug.header.map((h, i) => <td key={i} className="border px-2 py-1 font-medium">{h || '(vide)'}</td>)}
+                </tr>
+                <tr>
+                  {importDebug.mapped.map((m, i) => <td key={i} className="border px-2 py-1 text-brand-600">{m || 'null'}</td>)}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-sm text-gray-600 mb-2">5 premières lignes de données lues sous cet en-tête :</p>
+          <div className="overflow-x-auto">
+            <table className="text-xs border">
+              <tbody>
+                {importDebug.sample.map((row, ri) => (
+                  <tr key={ri}>
+                    {row.map((c: any, ci: number) => <td key={ci} className="border px-2 py-1">{String(c)}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Modal prévisualisation import */}
       {importRows && (
