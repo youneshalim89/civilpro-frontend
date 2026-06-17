@@ -42,7 +42,7 @@ export default function NouvelleSituationPage() {
         prix_unitaire:         parseFloat(a.prix_unitaire),
         quantite_cumulee_avant:parseFloat(a.quantite_cumulee_avant),
         quantite_periode:      0,
-      }));
+      })));
     }
   }, [initData]);
 
