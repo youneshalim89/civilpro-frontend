@@ -70,11 +70,11 @@ export default function ArticlesPage() {
   // Classification des colonnes par mots-clés (tolère "N° prix", "PU HT", "Désignation"...)
   const classifyColumn = (key: string): keyof ImportRow | 'montant' | null => {
     if (key.includes('design') || key.includes('libelle') || key.includes('desc')) return 'designation';
-    if (key.includes('unit')) return 'unite';
-    if (key.includes('quantit') || key === 'qte' || key === 'qty') return 'quantite_prevue';
+    if (key.includes('quantit') || key.includes('qte') || key.includes('qty')) return 'quantite_prevue';
     if (key.includes('montant') || key.includes('total')) return 'montant';
     if (key.includes('code') || key.includes('nprix') || key.includes('nordre') || key.includes('numero') || key === 'n' || key === 'no') return 'code_article';
     if (key.includes('pu') || key.includes('prix')) return 'prix_unitaire';
+    if (key.includes('unit')) return 'unite';
     return null;
   };
 
