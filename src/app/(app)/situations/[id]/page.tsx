@@ -71,12 +71,14 @@ export default function SituationDetailPage() {
               <DollarSign className="w-4 h-4" /> Marquer payé
             </button>
           )}
-          {s.statut !== 'paye' && (
-            <button onClick={() => { if (confirm(`Supprimer le décompte N°${s.numero_situation} ?`)) deleteMut.mutate(); }}
-              className="px-3 py-2 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-2">
-              <Trash2 className="w-4 h-4" /> Supprimer
-            </button>
-          )}
+          <button onClick={() => {
+            const msg = s.statut === 'paye'
+              ? `⚠️ Ce décompte N°${s.numero_situation} est déjà PAYÉ. Le supprimer retirera son montant du "Montant Entrée". Continuer ?`
+              : `Supprimer le décompte N°${s.numero_situation} ?`;
+            if (confirm(msg)) deleteMut.mutate();
+          }} className="px-3 py-2 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-2">
+            <Trash2 className="w-4 h-4" /> Supprimer
+          </button>
           <Link href={`/situations/recap/${s.marche_id}`} className="btn-secondary text-sm flex items-center gap-2">
             <BarChart3 className="w-4 h-4" /> Récapitulatif
           </Link>
