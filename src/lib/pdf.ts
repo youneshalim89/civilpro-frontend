@@ -5,9 +5,15 @@ const BRAND_ORANGE = [240, 140, 10] as [number, number, number];
 const DARK        = [26,  31,  46]  as [number, number, number];
 const GRAY_LIGHT  = [248, 249, 250] as [number, number, number];
 
+// Formatage manuel (espace ASCII normale) car toLocaleString(fr-FR) insere
+// une espace fine insecable (U+202F) que la police PDF par defaut affiche mal.
 const fmtMAD = (v: any) => {
   const n = parseFloat(v) || 0;
-  return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MAD';
+  const neg = n < 0;
+  const fixed = Math.abs(n).toFixed(2);
+  const [intPart, decPart] = fixed.split(".");
+  const withSep = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `${neg ? "-" : ""}${withSep},${decPart} MAD`;
 };
 
 const fmtDate = (d?: string) => {
