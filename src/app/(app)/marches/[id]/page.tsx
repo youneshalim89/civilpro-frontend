@@ -6,11 +6,17 @@ import Link from 'next/link';
 import {
   ArrowLeft, Edit2, FileText, ShoppingCart, Receipt,
   BarChart3, Package, FolderOpen, HardHat, AlertCircle, FileDown,
-  Wallet, Truck,
+  Wallet, Truck, TrendingUp, TrendingDown, Scale, ClipboardCheck,
 } from 'lucide-react';
-import { marchesService } from '@/lib/api';
+import { marchesService, chargesService, chargesJournalieresService } from '@/lib/api';
 import { fmt, STATUTS_MARCHE } from '@/lib/utils';
 import { exportMarchePDF } from '@/lib/pdf';
+import type { ChargeMensuelle } from '@/lib/api';
+
+const CHAMPS_CHARGE: (keyof ChargeMensuelle)[] = [
+  'masse_salariale', 'carburant', 'hebergement', 'restauration',
+  'reparations', 'pneumatiques', 'transport', 'sous_traitance', 'divers',
+];
 
 export default function MarcheDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +24,18 @@ export default function MarcheDetailPage() {
   const { data: marche, isLoading } = useQuery({
     queryKey: ['marche', id],
     queryFn:  () => marchesService.get(id).then(r => r.data.data),
+    enabled:  !!id,
+  });
+
+  const { data: chargesMensuelles } = useQuery({
+    queryKey: ['charges', id],
+    queryFn:  () => chargesService.list(id).then(r => r.data.data),
+    enabled:  !!id,
+  });
+
+  const { data: chargesJourTous } = useQuery({
+    queryKey: ['charges-jour-all', id],
+    queryFn:  () => chargesJournalieresService.list(id).then(r => r.data.data),
     enabled:  !!id,
   });
 
@@ -31,6 +49,14 @@ export default function MarcheDetailPage() {
 
   const statut = STATUTS_MARCHE[marche.statut];
 
+  const totalChargesFixes = (chargesMensuelles || []).reduce(
+    (s, c) => s + CHAMPS_CHARGE.reduce((s2, k) => s2 + (Number(c[k]) || 0), 0), 0);
+  const totalChargesJour  = (chargesJourTous || []).reduce((s, c) => s + (Number(c.montant) || 0), 0);
+
+  const montantEntree = Number(marche.total_paye) || 0;
+  const montantSortie = totalChargesFixes + totalChargesJour;
+  const difference    = montantEntree - montantSortie;
+
   const tabs = [
     { label: 'Bordereau des prix',  href: `/marches/${id}/articles`,   icon: FileText,    count: marche.nb_articles },
     { label: 'Commandes',           href: `/commandes?marche_id=${id}`, icon: ShoppingCart, count: marche.nb_commandes },
@@ -40,6 +66,7 @@ export default function MarcheDetailPage() {
     { label: 'Planning / Chantier', href: `/marches/${id}/chantier`,    icon: HardHat,      count: null },
     { label: 'Charges mensuelles',  href: `/marches/${id}/charges`,     icon: Wallet,       count: null },
     { label: 'Journal matériel',    href: `/marches/${id}/materiel`,    icon: Truck,        count: null },
+    { label: 'Feuille de pointage', href: `/marches/${id}/pointage`,    icon: ClipboardCheck, count: null },
   ];
 
   return (
@@ -70,6 +97,34 @@ export default function MarcheDetailPage() {
           <Link href={`/marches/${id}/modifier`} className="btn-secondary text-sm flex items-center gap-2">
             <Edit2 className="w-4 h-4" /> Modifier
           </Link>
+        </div>
+      </div>
+
+      {/* Synthèse financière — Entrée / Sortie / Différence */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="card p-5 border-l-4 border-green-400">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Montant Entrée</p>
+            <TrendingUp className="w-4 h-4 text-green-500" />
+          </div>
+          <p className="text-2xl font-bold text-green-600 mt-2">{fmt.currency(montantEntree)}</p>
+          <p className="text-xs text-gray-400 mt-1">Total facturé encaissé</p>
+        </div>
+        <div className="card p-5 border-l-4 border-red-400">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Montant Sortie</p>
+            <TrendingDown className="w-4 h-4 text-red-500" />
+          </div>
+          <p className="text-2xl font-bold text-red-600 mt-2">{fmt.currency(montantSortie)}</p>
+          <p className="text-xs text-gray-400 mt-1">Charges fixes + journalières (location, matériaux...)</p>
+        </div>
+        <div className={`card p-5 border-l-4 ${difference >= 0 ? 'border-blue-400' : 'border-orange-400'}`}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Différence</p>
+            <Scale className={`w-4 h-4 ${difference >= 0 ? 'text-blue-500' : 'text-orange-500'}`} />
+          </div>
+          <p className={`text-2xl font-bold mt-2 ${difference >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>{fmt.currency(difference)}</p>
+          <p className="text-xs text-gray-400 mt-1">Entrée − Sortie (résultat net)</p>
         </div>
       </div>
 

@@ -219,6 +219,18 @@ export interface ChargeJournaliere {
   notes?: string;
 }
 
+export interface PointagePersonnel {
+  id: string;
+  marche_id: string;
+  date_jour: string;
+  nom_personnel: string;
+  fonction?: string;
+  present: boolean;
+  heures_travaillees: number;
+  observation?: string;
+  created_by_nom?: string;
+}
+
 export interface JournalMateriel {
   id: string;
   marche_id: string;
@@ -303,6 +315,13 @@ export const chargesJournalieresService = {
     api.get<ApiResponse<ChargeJournaliere[]>>(`/marches/${marcheId}/charges-journalieres`, { params: mois ? { mois } : {} }),
   create: (marcheId: string, data: any) => api.post<ApiResponse<ChargeJournaliere>>(`/marches/${marcheId}/charges-journalieres`, data),
   delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/charges-journalieres/${id}`),
+};
+
+export const pointageService = {
+  list:   (marcheId: string, date?: string) =>
+    api.get<ApiResponse<PointagePersonnel[]>>(`/marches/${marcheId}/pointage`, { params: date ? { date } : {} }),
+  create: (marcheId: string, data: any) => api.post<ApiResponse<PointagePersonnel>>(`/marches/${marcheId}/pointage`, data),
+  delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/pointage/${id}`),
 };
 
 export const materielService = {
