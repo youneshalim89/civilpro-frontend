@@ -304,6 +304,7 @@ export const situationsService = {
   create:   (data: any)                 => api.post<ApiResponse<Situation>>('/situations', data),
   statut:   (id: string, data: any)     => api.patch(`/situations/${id}/statut`, data),
   recap:    (marcheId: string)          => api.get(`/situations/recap/${marcheId}`),
+  delete:   (id: string)                => api.delete(`/situations/${id}`),
 };
 
 export const chargesService = {

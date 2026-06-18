@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Eye, DollarSign, BarChart3 } from 'lucide-react';
+import { Plus, Eye, DollarSign, BarChart3, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { situationsService } from '@/lib/api';
 import { fmt, STATUTS_SITUATION } from '@/lib/utils';
@@ -31,6 +31,12 @@ export default function SituationsPage() {
     mutationFn: ({ id, s }: { id: string; s: string }) => situationsService.statut(id, { statut: s }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['situations'] }); toast.success('Statut mis à jour'); },
     onError:    () => toast.error('Erreur'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => situationsService.delete(id),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['situations'] }); toast.success('Décompte supprimé'); },
+    onError:    (err: any) => toast.error(err.response?.data?.message || 'Erreur lors de la suppression'),
   });
 
   const situations: Situation[] = data?.data || [];
@@ -114,6 +120,12 @@ export default function SituationsPage() {
                           <button onClick={() => { if (confirm('Marquer ce décompte comme approuvé et payé ?')) statutMut.mutate({ id: s.id, s: 'paye' }); }}
                             className="p-1.5 hover:bg-emerald-50 rounded-lg" title="Marquer payé">
                             <DollarSign className="w-4 h-4 text-emerald-500" />
+                          </button>
+                        )}
+                        {s.statut !== 'paye' && (
+                          <button onClick={() => { if (confirm(`Supprimer le décompte N°${s.numero_situation} ?`)) deleteMut.mutate(s.id); }}
+                            className="p-1.5 hover:bg-red-50 rounded-lg" title="Supprimer">
+                            <Trash2 className="w-4 h-4 text-red-400" />
                           </button>
                         )}
                         <Link href={`/situations/recap/${(s as any).marche_id}`}
