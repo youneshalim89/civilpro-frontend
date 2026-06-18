@@ -141,7 +141,7 @@ export default function NouvelleSituationPage() {
               </select>
             </div>
             <div>
-              <label className="label">Avancement physique (calculé)</label>
+              <label className="label">Avancement financier (calculé)</label>
               <div className="input text-sm bg-gray-50 font-semibold text-brand-600">
                 {avancementCalcule.toFixed(1)} %
               </div>

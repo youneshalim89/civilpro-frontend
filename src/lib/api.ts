@@ -166,7 +166,7 @@ export interface Situation {
   type_situation: 'provisoire' | 'mensuel' | 'definitif';
   periode_debut: string;
   periode_fin: string;
-  avancement_physique: number;
+  avancement_financier: number;
   montant_brut: number;
   retenue_garantie: number;
   avances_anterieures?: number;
@@ -316,6 +316,14 @@ export const situationsService = {
   statut:   (id: string, data: any)     => api.patch(`/situations/${id}/statut`, data),
   recap:    (marcheId: string)          => api.get(`/situations/recap/${marcheId}`),
   delete:   (id: string)                => api.delete(`/situations/${id}`),
+};
+
+export const avancementPhysiqueService = {
+  list:    (marcheId: string)            => api.get<ApiResponse<any[]>>(`/marches/${marcheId}/avancement-physique`),
+  get:     (marcheId: string, id: string) => api.get<ApiResponse<any>>(`/marches/${marcheId}/avancement-physique/${id}`),
+  preparer:(marcheId: string)            => api.get<ApiResponse<any>>(`/marches/${marcheId}/avancement-physique/init/preparer`),
+  create:  (marcheId: string, data: any) => api.post<ApiResponse<any>>(`/marches/${marcheId}/avancement-physique`, data),
+  delete:  (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/avancement-physique/${id}`),
 };
 
 export const chargesService = {

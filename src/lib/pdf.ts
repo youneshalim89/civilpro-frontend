@@ -358,20 +358,20 @@ export function exportSituationRecapPDF(data: any) {
 
   autoTable(doc, {
     startY:     y,
-    head:       [['N°', 'Type', 'Période début', 'Période fin', 'Avancement', 'Montant brut', 'RG', 'Montant net', 'Statut']],
+    head:       [['N°', 'Type', 'Période début', 'Période fin', 'Av. financier', 'Montant brut', 'RG', 'Montant net', 'Statut']],
     body:       situations.map((s: any) => [
       `N°${s.numero_situation}`,
       s.type_situation,
       fmtDate(s.periode_debut),
       fmtDate(s.periode_fin),
-      fmtPct(s.avancement_physique),
+      fmtPct(s.avancement_financier),
       fmtMAD(s.montant_brut),
       fmtMAD(s.retenue_garantie),
       fmtMAD(s.montant_net),
       s.statut?.toUpperCase(),
     ]),
     foot:       [[
-      'TOTAL', '', '', '', fmtPct(r.avancement_physique),
+      'TOTAL', '', '', '', fmtPct(r.avancement_financier),
       fmtMAD(r.total_situation), fmtMAD(r.total_rg), fmtMAD(r.total_net), '',
     ]],
     headStyles:  { fillColor: DARK, textColor: [255,255,255], fontSize: 7, fontStyle: 'bold' },

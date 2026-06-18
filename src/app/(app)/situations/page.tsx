@@ -72,7 +72,7 @@ export default function SituationsPage() {
                 <th className="table-header">Marché</th>
                 <th className="table-header">Type</th>
                 <th className="table-header">Période</th>
-                <th className="table-header text-right">Avancement</th>
+                <th className="table-header text-right">Av. financier</th>
                 <th className="table-header text-right">Montant brut</th>
                 <th className="table-header text-right">Retenue G.</th>
                 <th className="table-header text-right">Montant net</th>
@@ -99,9 +99,9 @@ export default function SituationsPage() {
                     <td className="table-cell text-right">
                       <div className="flex items-center justify-end gap-2">
                         <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                          <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${s.avancement_physique}%` }} />
+                          <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${s.avancement_financier}%` }} />
                         </div>
-                        <span className="text-xs w-10 text-right">{fmt.pct(s.avancement_physique)}</span>
+                        <span className="text-xs w-10 text-right">{fmt.pct(s.avancement_financier)}</span>
                       </div>
                     </td>
                     <td className="table-cell text-right">{fmt.currency(s.montant_brut)}</td>

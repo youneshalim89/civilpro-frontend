@@ -30,7 +30,7 @@ export default function SituationRecapPage() {
   // Données graphique progression
   const chartData = situations.map((s: any) => ({
     name:              `N°${s.numero_situation}`,
-    avancement:        parseFloat(s.avancement_physique),
+    avancement:        parseFloat(s.avancement_financier),
     montant_net:       parseFloat(s.montant_net),
     montant_brut:      parseFloat(s.montant_brut),
   }));
@@ -77,7 +77,7 @@ export default function SituationRecapPage() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           <div className="card p-5">
             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-brand-500" /> Progression physique
+              <TrendingUp className="w-4 h-4 text-brand-500" /> Progression financière
             </h3>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={chartData}>
@@ -118,7 +118,7 @@ export default function SituationRecapPage() {
                 <th className="table-header">N°</th>
                 <th className="table-header">Type</th>
                 <th className="table-header">Période</th>
-                <th className="table-header text-right">Avancement</th>
+                <th className="table-header text-right">Av. financier</th>
                 <th className="table-header text-right">Montant brut</th>
                 <th className="table-header text-right">RG</th>
                 <th className="table-header text-right">Montant net</th>
@@ -131,7 +131,7 @@ export default function SituationRecapPage() {
                   <td className="table-cell font-bold text-brand-600">N°{s.numero_situation}</td>
                   <td className="table-cell text-xs text-gray-500">{s.type_situation}</td>
                   <td className="table-cell text-xs">{fmt.date(s.periode_debut)} → {fmt.date(s.periode_fin)}</td>
-                  <td className="table-cell text-right">{fmt.pct(s.avancement_physique)}</td>
+                  <td className="table-cell text-right">{fmt.pct(s.avancement_financier)}</td>
                   <td className="table-cell text-right">{fmt.currency(s.montant_brut)}</td>
                   <td className="table-cell text-right text-red-500">{fmt.currency(s.retenue_garantie)}</td>
                   <td className="table-cell text-right font-semibold text-green-700">{fmt.currency(s.montant_net)}</td>
@@ -159,7 +159,7 @@ export default function SituationRecapPage() {
       {/* Tableau par article */}
       <div className="card overflow-hidden">
         <div className="px-5 py-4 border-b">
-          <h3 className="font-semibold text-gray-800">Avancement par article</h3>
+          <h3 className="font-semibold text-gray-800">Avancement financier par article (basé sur les décomptes)</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

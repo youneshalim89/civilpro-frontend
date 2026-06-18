@@ -91,7 +91,7 @@ export default function SituationDetailPage() {
             <InfoRow label="Type" value={TYPE_LABELS[s.type_situation] || s.type_situation} />
             <InfoRow label="Maître d'ouvrage" value={s.maitre_ouvrage || '—'} />
             <InfoRow label="Période" value={`${fmt.date(s.periode_debut)} → ${fmt.date(s.periode_fin)}`} />
-            <InfoRow label="Avancement physique" value={fmt.pct(s.avancement_physique)} />
+            <InfoRow label="Avancement financier" value={fmt.pct(s.avancement_financier)} />
             <InfoRow label="Date soumission" value={s.date_soumission ? fmt.date(s.date_soumission) : '—'} />
             <InfoRow label="Date approbation" value={s.date_approbation ? fmt.date(s.date_approbation) : '—'} />
             <InfoRow label="Date paiement" value={s.date_paiement ? fmt.date(s.date_paiement) : '—'} />
