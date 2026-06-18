@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Eye, CheckCircle, DollarSign, BarChart3 } from 'lucide-react';
+import { Plus, Eye, DollarSign, BarChart3 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { situationsService } from '@/lib/api';
 import { fmt, STATUTS_SITUATION } from '@/lib/utils';
@@ -111,19 +111,7 @@ export default function SituationsPage() {
                           <Eye className="w-4 h-4 text-gray-500" />
                         </Link>
                         {s.statut === 'en_cours' && (
-                          <button onClick={() => statutMut.mutate({ id: s.id, s: 'soumis' })}
-                            className="p-1.5 hover:bg-blue-50 rounded-lg" title="Soumettre">
-                            <CheckCircle className="w-4 h-4 text-blue-500" />
-                          </button>
-                        )}
-                        {s.statut === 'soumis' && (
-                          <button onClick={() => statutMut.mutate({ id: s.id, s: 'approuve' })}
-                            className="p-1.5 hover:bg-green-50 rounded-lg" title="Approuver">
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          </button>
-                        )}
-                        {s.statut === 'approuve' && (
-                          <button onClick={() => statutMut.mutate({ id: s.id, s: 'paye' })}
+                          <button onClick={() => { if (confirm('Marquer ce décompte comme approuvé et payé ?')) statutMut.mutate({ id: s.id, s: 'paye' }); }}
                             className="p-1.5 hover:bg-emerald-50 rounded-lg" title="Marquer payé">
                             <DollarSign className="w-4 h-4 text-emerald-500" />
                           </button>

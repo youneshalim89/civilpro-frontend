@@ -15,7 +15,6 @@ export default function NouvelleSituationPage() {
   const [type,        setType]        = useState('provisoire');
   const [periodeDebut,setPeriodeDebut]= useState('');
   const [periodeFin,  setPeriodeFin]  = useState('');
-  const [avancement,  setAvancement]  = useState(0);
   const [observations,setObservations]= useState('');
   const [lignes,      setLignes]      = useState<any[]>([]);
   const [saving,      setSaving]      = useState(false);
@@ -28,6 +27,12 @@ export default function NouvelleSituationPage() {
   const { data: initData, isFetching: loadingInit } = useQuery({
     queryKey: ['situation-init', marcheId],
     queryFn:  () => situationsService.init(marcheId).then(r => r.data.data),
+    enabled:  !!marcheId,
+  });
+
+  const { data: situationsPrecedentes } = useQuery({
+    queryKey: ['situations-marche', marcheId],
+    queryFn:  () => situationsService.list({ marche_id: marcheId, limit: 100 }).then(r => r.data.data),
     enabled:  !!marcheId,
   });
 
@@ -50,13 +55,26 @@ export default function NouvelleSituationPage() {
     setLignes(prev => prev.map((l, idx) => idx === i ? { ...l, quantite_periode: val } : l));
 
   const marche   = initData?.marche;
-  const tauxRG   = parseFloat(marche?.taux_retenue_garantie || 7) / 100;
 
   const montantBrut = lignes.reduce((sum, l) => {
     return sum + (parseFloat(String(l.quantite_periode)) * parseFloat(String(l.prix_unitaire)));
   }, 0);
-  const retenue   = montantBrut * tauxRG;
-  const montantNet= montantBrut - retenue;
+
+  // RG : 10% du décompte, plafonné au taux de retenue de garantie du marché (cumulé)
+  const rgDejaRetenue = (situationsPrecedentes || []).reduce((s: number, st: any) => s + (parseFloat(st.retenue_garantie) || 0), 0);
+  const plafondRG     = parseFloat(marche?.montant_initial || 0) * (parseFloat(marche?.taux_retenue_garantie || 7) / 100);
+  const rgPotentielle = montantBrut * 0.10;
+  const rgRestante    = Math.max(0, plafondRG - rgDejaRetenue);
+  const retenue    = Math.min(rgPotentielle, rgRestante);
+  const montantNet = montantBrut - retenue;
+
+  // Avancement physique calculé automatiquement à partir des prestations
+  const montantTotalBQ = lignes.reduce((s, l) => s + (l.quantite_prevue * l.prix_unitaire), 0);
+  const montantCumuleTotalBQ = lignes.reduce((s, l) => {
+    const qCumulee = l.quantite_cumulee_avant + parseFloat(String(l.quantite_periode || 0));
+    return s + (qCumulee * l.prix_unitaire);
+  }, 0);
+  const avancementCalcule = montantTotalBQ > 0 ? Math.min(100, (montantCumuleTotalBQ / montantTotalBQ) * 100) : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +87,6 @@ export default function NouvelleSituationPage() {
         type_situation:      type,
         periode_debut:       periodeDebut,
         periode_fin:         periodeFin,
-        avancement_physique: avancement,
         observations,
         lignes: lignes.filter(l => l.quantite_periode > 0).map(l => ({
           article_id:            l.article_id,
@@ -124,9 +141,10 @@ export default function NouvelleSituationPage() {
               </select>
             </div>
             <div>
-              <label className="label">Avancement physique (%)</label>
-              <input type="number" min={0} max={100} step={0.1} className="input text-sm"
-                value={avancement} onChange={e => setAvancement(parseFloat(e.target.value) || 0)} />
+              <label className="label">Avancement physique (calculé)</label>
+              <div className="input text-sm bg-gray-50 font-semibold text-brand-600">
+                {avancementCalcule.toFixed(1)} %
+              </div>
             </div>
             <div>
               <label className="label">Période du *</label>
@@ -153,7 +171,7 @@ export default function NouvelleSituationPage() {
               <h3 className="font-semibold text-gray-800">Bordereau des quantités</h3>
               {marche && (
                 <span className="text-sm text-gray-500">
-                  RG : {marche.taux_retenue_garantie}%
+                  RG : 10% par décompte, plafonné à {marche.taux_retenue_garantie}% du marché
                 </span>
               )}
             </div>
@@ -216,7 +234,10 @@ export default function NouvelleSituationPage() {
                     </tr>
                     <tr className="bg-red-50/50 text-sm">
                       <td colSpan={8} className="px-4 py-3 text-right text-red-600">
-                        Retenue de garantie ({marche?.taux_retenue_garantie}%)
+                        Retenue de garantie (10%, plafond cumulé {marche?.taux_retenue_garantie}%)
+                        {rgRestante <= 0 && montantBrut > 0 && (
+                          <span className="block text-xs text-gray-400">Plafond déjà atteint — aucune retenue supplémentaire</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right text-red-600 font-semibold">- {fmt.currency(retenue)}</td>
                       <td />
