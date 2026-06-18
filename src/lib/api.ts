@@ -169,8 +169,19 @@ export interface Situation {
   avancement_physique: number;
   montant_brut: number;
   retenue_garantie: number;
+  avances_anterieures?: number;
+  deductions_diverses?: number;
   montant_net: number;
   statut: 'en_cours' | 'soumis' | 'approuve' | 'paye' | 'rejete';
+  observations?: string;
+  date_soumission?: string;
+  date_approbation?: string;
+  date_paiement?: string;
+  numero_marche?: string;
+  marche_objet?: string;
+  maitre_ouvrage?: string;
+  entreprise_attributaire?: string;
+  taux_retenue_garantie?: number;
   lignes?: LigneSituation[];
 }
 
