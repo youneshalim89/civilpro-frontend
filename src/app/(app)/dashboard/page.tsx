@@ -2,7 +2,7 @@
 // src/app/(app)/dashboard/page.tsx — Tableau de bord principal
 import { useQuery } from '@tanstack/react-query';
 import {
-  FileText, TrendingUp, AlertTriangle, CheckCircle2,
+  FileText, TrendingUp, TrendingDown, Scale, AlertTriangle, CheckCircle2,
   Clock, Package, DollarSign, Building2,
 } from 'lucide-react';
 import { marchesService } from '@/lib/api';
@@ -25,7 +25,11 @@ export default function DashboardPage() {
   if (isLoading) return <DashboardSkeleton />;
   if (!data)     return null;
 
-  const { stats, par_statut, alertes_echeance, financiers, alertes_stock } = data;
+  const { stats, par_statut, alertes_echeance, financiers, alertes_stock, synthese_projets = [] } = data;
+
+  const totalEntreeGlobal = synthese_projets.reduce((s: number, p: any) => s + (Number(p.montant_entree) || 0), 0);
+  const totalSortieGlobal = synthese_projets.reduce((s: number, p: any) => s + (Number(p.montant_sortie) || 0), 0);
+  const differenceGlobale = totalEntreeGlobal - totalSortieGlobal;
 
   const kpis = [
     {
@@ -99,6 +103,86 @@ export default function DashboardPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Synthèse financière globale — tous projets */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="card p-5 border-l-4 border-green-400">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Montant Entrée (tous projets)</p>
+            <TrendingUp className="w-4 h-4 text-green-500" />
+          </div>
+          <p className="text-2xl font-bold text-green-600 mt-2">{fmt.currency(totalEntreeGlobal)}</p>
+          <p className="text-xs text-gray-400 mt-1">Total facturé encaissé</p>
+        </div>
+        <div className="card p-5 border-l-4 border-red-400">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Montant Sortie (tous projets)</p>
+            <TrendingDown className="w-4 h-4 text-red-500" />
+          </div>
+          <p className="text-2xl font-bold text-red-600 mt-2">{fmt.currency(totalSortieGlobal)}</p>
+          <p className="text-xs text-gray-400 mt-1">Charges fixes + journalières</p>
+        </div>
+        <div className={`card p-5 border-l-4 ${differenceGlobale >= 0 ? 'border-blue-400' : 'border-orange-400'}`}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Différence (tous projets)</p>
+            <Scale className={`w-4 h-4 ${differenceGlobale >= 0 ? 'text-blue-500' : 'text-orange-500'}`} />
+          </div>
+          <p className={`text-2xl font-bold mt-2 ${differenceGlobale >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>{fmt.currency(differenceGlobale)}</p>
+          <p className="text-xs text-gray-400 mt-1">Résultat net global</p>
+        </div>
+      </div>
+
+      {/* Synthèse par projet */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b">
+          <h3 className="font-semibold text-gray-800">Synthèse par projet</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="table-header">Marché</th>
+                <th className="table-header">Statut</th>
+                <th className="table-header text-right">Entrée</th>
+                <th className="table-header text-right">Sortie</th>
+                <th className="table-header text-right">Différence</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {synthese_projets.map((p: any) => {
+                const diff = (Number(p.montant_entree) || 0) - (Number(p.montant_sortie) || 0);
+                return (
+                  <tr key={p.id} className="hover:bg-gray-50">
+                    <td className="table-cell">
+                      <Link href={`/marches/${p.id}`} className="font-medium text-brand-600 hover:underline">{p.numero_marche}</Link>
+                      <p className="text-xs text-gray-400 truncate max-w-xs">{p.objet}</p>
+                    </td>
+                    <td className="table-cell">
+                      <span className={`badge ${STATUTS_MARCHE[p.statut]?.color}`}>{STATUTS_MARCHE[p.statut]?.label}</span>
+                    </td>
+                    <td className="table-cell text-right text-green-600 font-medium">{fmt.currency(p.montant_entree)}</td>
+                    <td className="table-cell text-right text-red-600 font-medium">{fmt.currency(p.montant_sortie)}</td>
+                    <td className={`table-cell text-right font-semibold ${diff >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>{fmt.currency(diff)}</td>
+                  </tr>
+                );
+              })}
+              {!synthese_projets.length && (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm">Aucun projet</td></tr>
+              )}
+            </tbody>
+            {synthese_projets.length > 0 && (
+              <tfoot className="border-t bg-brand-50">
+                <tr>
+                  <td colSpan={2} className="px-4 py-3 text-right font-bold text-brand-700 text-sm">TOTAL</td>
+                  <td className="px-4 py-3 text-right font-bold text-green-700">{fmt.currency(totalEntreeGlobal)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-red-700">{fmt.currency(totalSortieGlobal)}</td>
+                  <td className={`px-4 py-3 text-right font-bold ${differenceGlobale >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>{fmt.currency(differenceGlobale)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </div>
 
       {/* Graphiques */}
