@@ -227,6 +227,7 @@ export interface PointagePersonnel {
   fonction?: string;
   present: boolean;
   heures_travaillees: number;
+  taux_horaire: number;
   observation?: string;
   created_by_nom?: string;
 }
@@ -238,6 +239,7 @@ export interface JournalMateriel {
   engin: string;
   heures_travaillees: number;
   gasoil_consomme: number;
+  taux_horaire: number;
   statut: 'operationnel' | 'panne' | 'entretien' | 'arret';
   observation?: string;
   created_by_nom?: string;

@@ -26,8 +26,8 @@ export default function PointagePage() {
   const [showPersForm, setShowPersForm] = useState(false);
   const [showMatForm, setShowMatForm] = useState(false);
 
-  const [persForm, setPersForm] = useState({ nom_personnel: '', fonction: 'Manœuvre', present: true, heures_travaillees: 8, observation: '' });
-  const [matForm, setMatForm]   = useState({ engin: '', heures_travaillees: 0, gasoil_consomme: 0, statut: 'operationnel', observation: '' });
+  const [persForm, setPersForm] = useState({ nom_personnel: '', fonction: 'Manœuvre', present: true, heures_travaillees: 8, taux_horaire: 0, observation: '' });
+  const [matForm, setMatForm]   = useState({ engin: '', heures_travaillees: 0, gasoil_consomme: 0, taux_horaire: 0, statut: 'operationnel', observation: '' });
 
   const { data: marche } = useQuery({
     queryKey: ['marche', id],
@@ -51,7 +51,7 @@ export default function PointagePage() {
     onSuccess:  () => {
       qc.invalidateQueries({ queryKey: ['pointage', id, date] });
       toast.success('Personnel pointé');
-      setPersForm({ nom_personnel: '', fonction: persForm.fonction, present: true, heures_travaillees: 8, observation: '' });
+      setPersForm({ nom_personnel: '', fonction: persForm.fonction, present: true, heures_travaillees: 8, taux_horaire: 0, observation: '' });
       setShowPersForm(false);
     },
     onError: () => toast.error('Erreur'),
@@ -67,7 +67,7 @@ export default function PointagePage() {
     onSuccess:  () => {
       qc.invalidateQueries({ queryKey: ['materiel', id] });
       toast.success('Engin pointé');
-      setMatForm({ engin: '', heures_travaillees: 0, gasoil_consomme: 0, statut: 'operationnel', observation: '' });
+      setMatForm({ engin: '', heures_travaillees: 0, gasoil_consomme: 0, taux_horaire: 0, statut: 'operationnel', observation: '' });
       setShowMatForm(false);
     },
     onError: () => toast.error('Erreur'),
@@ -162,6 +162,13 @@ export default function PointagePage() {
                 <input type="number" step="0.5" className="input text-sm" placeholder="Heures" value={persForm.heures_travaillees}
                   onChange={e => setPersForm(f => ({ ...f, heures_travaillees: parseFloat(e.target.value) || 0 }))} />
               </div>
+              <input type="number" step="0.5" className="input text-sm" placeholder="Taux horaire (DH/h)" value={persForm.taux_horaire}
+                onChange={e => setPersForm(f => ({ ...f, taux_horaire: parseFloat(e.target.value) || 0 }))} />
+              {persForm.taux_horaire > 0 && (
+                <p className="text-xs text-gray-500">
+                  Charge générée : <strong className="text-brand-600">{fmt.currency(persForm.heures_travaillees * persForm.taux_horaire)}</strong> (ajoutée automatiquement aux charges journalières)
+                </p>
+              )}
               <label className="flex items-center gap-2 text-sm text-gray-600">
                 <input type="checkbox" checked={persForm.present} onChange={e => setPersForm(f => ({ ...f, present: e.target.checked }))} />
                 Présent
@@ -185,17 +192,21 @@ export default function PointagePage() {
                   <th className="table-header">Nom</th>
                   <th className="table-header">Fonction</th>
                   <th className="table-header text-right">Heures</th>
+                  <th className="table-header text-right">Coût</th>
                   <th className="table-header">Présent</th>
                   <th className="table-header"></th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {loadingPers && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400 text-xs animate-pulse">Chargement...</td></tr>}
+                {loadingPers && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400 text-xs animate-pulse">Chargement...</td></tr>}
                 {personnel.map(p => (
                   <tr key={p.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{p.nom_personnel}</td>
                     <td className="table-cell text-gray-500">{p.fonction || '—'}</td>
                     <td className="table-cell text-right font-mono">{p.heures_travaillees} h</td>
+                    <td className="table-cell text-right font-mono text-brand-600">
+                      {Number(p.taux_horaire) > 0 ? fmt.currency(p.heures_travaillees * p.taux_horaire) : '—'}
+                    </td>
                     <td className="table-cell">
                       <span className={`badge ${p.present ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                         {p.present ? 'Présent' : 'Absent'}
@@ -208,7 +219,7 @@ export default function PointagePage() {
                   </tr>
                 ))}
                 {!loadingPers && !personnel.length && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-xs">Aucun pointage pour ce jour</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-xs">Aucun pointage pour ce jour</td></tr>
                 )}
               </tbody>
             </table>
@@ -239,6 +250,13 @@ export default function PointagePage() {
                 <input type="number" step="0.1" className="input text-sm" placeholder="Gasoil (L)" value={matForm.gasoil_consomme}
                   onChange={e => setMatForm(f => ({ ...f, gasoil_consomme: parseFloat(e.target.value) || 0 }))} />
               </div>
+              <input type="number" step="0.5" className="input text-sm" placeholder="Taux horaire (DH/h)" value={matForm.taux_horaire}
+                onChange={e => setMatForm(f => ({ ...f, taux_horaire: parseFloat(e.target.value) || 0 }))} />
+              {matForm.taux_horaire > 0 && (
+                <p className="text-xs text-gray-500">
+                  Charge générée : <strong className="text-brand-600">{fmt.currency(matForm.heures_travaillees * matForm.taux_horaire)}</strong> (ajoutée automatiquement aux charges journalières)
+                </p>
+              )}
               <select className="input text-sm" value={matForm.statut} onChange={e => setMatForm(f => ({ ...f, statut: e.target.value }))}>
                 <option value="operationnel">Opérationnel</option>
                 <option value="panne">Panne</option>
@@ -264,17 +282,21 @@ export default function PointagePage() {
                   <th className="table-header">Engin</th>
                   <th className="table-header text-right">Heures</th>
                   <th className="table-header text-right">Gasoil</th>
+                  <th className="table-header text-right">Coût</th>
                   <th className="table-header">Statut</th>
                   <th className="table-header"></th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {loadingMat && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400 text-xs animate-pulse">Chargement...</td></tr>}
+                {loadingMat && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400 text-xs animate-pulse">Chargement...</td></tr>}
                 {materielJour.map(j => (
                   <tr key={j.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{j.engin}</td>
                     <td className="table-cell text-right font-mono">{j.heures_travaillees} h</td>
                     <td className="table-cell text-right font-mono">{j.gasoil_consomme} L</td>
+                    <td className="table-cell text-right font-mono text-brand-600">
+                      {Number(j.taux_horaire) > 0 ? fmt.currency(j.heures_travaillees * j.taux_horaire) : '—'}
+                    </td>
                     <td className="table-cell">
                       <span className={`badge ${j.statut === 'panne' ? 'bg-red-100 text-red-700' : j.statut === 'entretien' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
                         {j.statut}
@@ -287,7 +309,7 @@ export default function PointagePage() {
                   </tr>
                 ))}
                 {!loadingMat && !materielJour.length && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-xs">Aucun engin pointé ce jour</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-xs">Aucun engin pointé ce jour</td></tr>
                 )}
               </tbody>
             </table>
