@@ -106,14 +106,32 @@ export default function ChantierPage() {
       {tab === 'planning' && (
         <div className="space-y-4">
           {phases.length > 0 && (
-            <div className="card p-4">
-              <div className="flex justify-between mb-2">
-                <span className="text-sm text-gray-600">Avancement moyen du planning</span>
-                <span className="text-sm font-bold">{avancementMoyen.toFixed(1)}%</span>
+            <div className="card p-4 space-y-4">
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-gray-600">Avancement physique du marché (réf. — basé sur les prestations)</span>
+                  <span className="text-sm font-bold text-blue-600">{fmt.pct(marche?.avancement_physique || 0)}</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-3">
+                  <div className="bg-blue-500 h-3 rounded-full transition-all" style={{ width: `${marche?.avancement_physique || 0}%` }} />
+                </div>
               </div>
-              <div className="bg-gray-200 rounded-full h-3">
-                <div className="bg-brand-500 h-3 rounded-full transition-all" style={{ width: `${avancementMoyen}%` }} />
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-gray-600">Avancement moyen du planning (phases)</span>
+                  <span className="text-sm font-bold">{avancementMoyen.toFixed(1)}%</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-3">
+                  <div className="bg-brand-500 h-3 rounded-full transition-all" style={{ width: `${avancementMoyen}%` }} />
+                </div>
               </div>
+              {Math.abs(avancementMoyen - (marche?.avancement_physique || 0)) > 5 && (
+                <div className="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                  Écart de {Math.abs(avancementMoyen - (marche?.avancement_physique || 0)).toFixed(1)} points entre le planning et l'avancement physique réel.
+                  <Link href={`/marches/${id}/avancement-physique`} className="underline font-medium ml-auto whitespace-nowrap">Mettre à jour →</Link>
+                </div>
+              )}
             </div>
           )}
 
