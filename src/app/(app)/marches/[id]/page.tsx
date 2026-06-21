@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Edit2, FileText, ShoppingCart, Receipt,
   BarChart3, Package, FolderOpen, HardHat, AlertCircle, FileDown,
-  Wallet, Truck, TrendingUp, TrendingDown, Scale, ClipboardCheck, Activity,
+  Wallet, Truck, TrendingUp, TrendingDown, Scale, ClipboardCheck, Activity, Coins,
 } from 'lucide-react';
 import { marchesService, chargesService, chargesJournalieresService } from '@/lib/api';
 import { fmt, STATUTS_MARCHE } from '@/lib/utils';
@@ -68,6 +68,7 @@ export default function MarcheDetailPage() {
     { label: 'Journal matériel',    href: `/marches/${id}/materiel`,    icon: Truck,        count: null },
     { label: 'Feuille de pointage', href: `/marches/${id}/pointage`,    icon: ClipboardCheck, count: null },
     { label: 'Avancement physique', href: `/marches/${id}/avancement-physique`, icon: Activity, count: null },
+    { label: 'Caisse Générale',     href: `/marches/${id}/caisse`,      icon: Coins,        count: null },
   ];
 
   return (

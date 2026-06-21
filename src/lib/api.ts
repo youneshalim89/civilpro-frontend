@@ -79,7 +79,19 @@ export interface Marche {
   total_paye?: number;
   jours_restants?: number;
   jours_ecoules?: number;
+  solde_caisse?: number;
   created_at: string;
+}
+
+export interface MouvementCaisse {
+  id: string;
+  date_mouvement: string;
+  categorie: 'decompte' | 'cotisation' | 'vente_materiaux' | 'autres_travaux' | 'autre';
+  designation?: string;
+  montant: number;
+  notes?: string;
+  source: 'decompte' | 'manuel';
+  created_by_nom?: string;
 }
 
 export interface ArticleMarche {
@@ -337,6 +349,12 @@ export const chargesJournalieresService = {
     api.get<ApiResponse<ChargeJournaliere[]>>(`/marches/${marcheId}/charges-journalieres`, { params: mois ? { mois } : {} }),
   create: (marcheId: string, data: any) => api.post<ApiResponse<ChargeJournaliere>>(`/marches/${marcheId}/charges-journalieres`, data),
   delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/charges-journalieres/${id}`),
+};
+
+export const caisseService = {
+  get:    (marcheId: string)            => api.get<ApiResponse<{ historique: MouvementCaisse[]; synthese: any }>>(`/marches/${marcheId}/caisse`),
+  create: (marcheId: string, data: any) => api.post<ApiResponse<MouvementCaisse>>(`/marches/${marcheId}/caisse`, data),
+  delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/caisse/${id}`),
 };
 
 export const pointageService = {

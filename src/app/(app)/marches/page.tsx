@@ -88,7 +88,7 @@ export default function MarchesPage() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="table-header">N° Marché</th>
+                <th className="table-header">N° Marché / Caisse</th>
                 <th className="table-header">Objet</th>
                 <th className="table-header">Maître d'ouvrage</th>
                 <th className="table-header">Montant</th>
@@ -108,7 +108,12 @@ export default function MarchesPage() {
               ))}
               {!isLoading && data?.data?.map((m: Marche) => (
                 <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="table-cell font-mono font-medium text-brand-600">{m.numero_marche}</td>
+                  <td className="table-cell">
+                    <p className="font-mono font-medium text-brand-600">{m.numero_marche}</p>
+                    <p className={`text-xs font-semibold ${Number(m.solde_caisse) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      Caisse : {fmt.currency(m.solde_caisse || 0)}
+                    </p>
+                  </td>
                   <td className="table-cell max-w-[200px]">
                     <p className="truncate font-medium text-gray-800">{m.objet}</p>
                   </td>
