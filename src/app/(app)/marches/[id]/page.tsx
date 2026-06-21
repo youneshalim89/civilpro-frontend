@@ -1,12 +1,13 @@
 'use client';
 // src/app/(app)/marches/[id]/page.tsx — Détail d'un marché
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Edit2, FileText, ShoppingCart, Receipt,
   BarChart3, Package, FolderOpen, HardHat, AlertCircle, FileDown,
-  Wallet, Truck, TrendingUp, TrendingDown, Scale, ClipboardCheck, Activity, Coins,
+  Wallet, Truck, TrendingUp, TrendingDown, Scale, ClipboardCheck, Activity, Coins, ChevronDown,
 } from 'lucide-react';
 import { marchesService, chargesService, chargesJournalieresService } from '@/lib/api';
 import { fmt, STATUTS_MARCHE } from '@/lib/utils';
@@ -20,6 +21,7 @@ const CHAMPS_CHARGE: (keyof ChargeMensuelle)[] = [
 
 export default function MarcheDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [showInfos, setShowInfos] = useState(false);
 
   const { data: marche, isLoading } = useQuery({
     queryKey: ['marche', id],
@@ -165,18 +167,23 @@ export default function MarcheDetailPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Identité */}
         <div className="card p-5 col-span-2">
-          <h3 className="font-semibold text-gray-800 mb-4">Informations générales</h3>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
-            <InfoRow label="Maître d'ouvrage"         value={marche.maitre_ouvrage} />
-            <InfoRow label="Entreprise attributaire"  value={marche.entreprise_attributaire} />
-            <InfoRow label="Chef de marché"           value={marche.chef_marche_nom || '—'} />
-            <InfoRow label="Date commencement"        value={fmt.date(marche.date_commencement)} />
-            <InfoRow label="Délai contractuel"        value={`${marche.delai_contractuel} jours`} />
-            <InfoRow label="Date fin prévue"          value={fmt.date(marche.date_fin_prevue)} />
-            <InfoRow label="Jours écoulés"            value={`${marche.jours_ecoules || 0} j`} />
-            <InfoRow label="Taux TVA"                 value={`${marche.taux_tva} %`} />
-            <InfoRow label="Retenue de garantie"      value={`${marche.taux_retenue_garantie} %`} />
-          </div>
+          <button onClick={() => setShowInfos(v => !v)} className="w-full flex items-center justify-between">
+            <h3 className="font-semibold text-gray-800">Informations générales</h3>
+            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showInfos ? 'rotate-180' : ''}`} />
+          </button>
+          {showInfos && (
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm mt-4">
+              <InfoRow label="Maître d'ouvrage"         value={marche.maitre_ouvrage} />
+              <InfoRow label="Entreprise attributaire"  value={marche.entreprise_attributaire} />
+              <InfoRow label="Chef de marché"           value={marche.chef_marche_nom || '—'} />
+              <InfoRow label="Date commencement"        value={fmt.date(marche.date_commencement)} />
+              <InfoRow label="Délai contractuel"        value={`${marche.delai_contractuel} jours`} />
+              <InfoRow label="Date fin prévue"          value={fmt.date(marche.date_fin_prevue)} />
+              <InfoRow label="Jours écoulés"            value={`${marche.jours_ecoules || 0} j`} />
+              <InfoRow label="Taux TVA"                 value={`${marche.taux_tva} %`} />
+              <InfoRow label="Retenue de garantie"      value={`${marche.taux_retenue_garantie} %`} />
+            </div>
+          )}
         </div>
 
         {/* Indicateurs financiers */}
