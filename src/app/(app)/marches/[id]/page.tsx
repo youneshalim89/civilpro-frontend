@@ -58,17 +58,17 @@ export default function MarcheDetailPage() {
   const difference    = montantEntree - montantSortie;
 
   const tabs = [
+    { label: 'Caisse Générale',     href: `/marches/${id}/caisse`,      icon: Coins,        count: null },
+    { label: 'Feuille de pointage', href: `/marches/${id}/pointage`,    icon: ClipboardCheck, count: null },
+    { label: 'Charges mensuelles',  href: `/marches/${id}/charges`,     icon: Wallet,       count: null },
     { label: 'Bordereau des prix',  href: `/marches/${id}/articles`,   icon: FileText,    count: marche.nb_articles },
     { label: 'Commandes',           href: `/commandes?marche_id=${id}`, icon: ShoppingCart, count: marche.nb_commandes },
     { label: 'Factures',            href: `/factures?marche_id=${id}`,  icon: Receipt,      count: marche.nb_factures },
     { label: 'Situations',          href: `/situations?marche_id=${id}`,icon: BarChart3,    count: marche.dernier_decompte },
     { label: 'Documents',           href: `/documents?marche_id=${id}`, icon: FolderOpen,   count: marche.nb_documents },
     { label: 'Planning / Chantier', href: `/marches/${id}/chantier`,    icon: HardHat,      count: null },
-    { label: 'Charges mensuelles',  href: `/marches/${id}/charges`,     icon: Wallet,       count: null },
     { label: 'Journal matériel',    href: `/marches/${id}/materiel`,    icon: Truck,        count: null },
-    { label: 'Feuille de pointage', href: `/marches/${id}/pointage`,    icon: ClipboardCheck, count: null },
     { label: 'Avancement physique', href: `/marches/${id}/avancement-physique`, icon: Activity, count: null },
-    { label: 'Caisse Générale',     href: `/marches/${id}/caisse`,      icon: Coins,        count: null },
   ];
 
   return (
