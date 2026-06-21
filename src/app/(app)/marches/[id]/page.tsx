@@ -168,7 +168,7 @@ export default function MarcheDetailPage() {
         {/* Identité */}
         <div className="card p-5 col-span-2">
           <button onClick={() => setShowInfos(v => !v)} className="w-full flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800">Informations générales</h3>
+            <h3 className="font-semibold text-gray-800">Informations générales du projet</h3>
             <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showInfos ? 'rotate-180' : ''}`} />
           </button>
           {showInfos && (
