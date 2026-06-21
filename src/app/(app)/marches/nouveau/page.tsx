@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Building2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { marchesService } from '@/lib/api';
+import NumberInput from '@/components/NumberInput';
 
 export default function NouveauMarchePage() {
   const router = useRouter();
@@ -95,18 +96,18 @@ export default function NouveauMarchePage() {
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div>
               <label className="label">Montant du marché (MAD HT) *</label>
-              <input type="number" step="0.01" min={0} className="input" value={form.montant_initial}
-                onChange={set('montant_initial')} required />
+              <NumberInput min={0} className="input" value={form.montant_initial}
+                onChange={v => setForm(f => ({ ...f, montant_initial: v }))} />
             </div>
             <div>
               <label className="label">Taux TVA (%)</label>
-              <input type="number" step="0.01" min={0} max={100} className="input" value={form.taux_tva}
-                onChange={set('taux_tva')} />
+              <NumberInput min={0} max={100} className="input" value={form.taux_tva}
+                onChange={v => setForm(f => ({ ...f, taux_tva: v }))} />
             </div>
             <div>
               <label className="label">Retenue de garantie (%)</label>
-              <input type="number" step="0.01" min={0} max={100} className="input" value={form.taux_retenue_garantie}
-                onChange={set('taux_retenue_garantie')} />
+              <NumberInput min={0} max={100} className="input" value={form.taux_retenue_garantie}
+                onChange={v => setForm(f => ({ ...f, taux_retenue_garantie: v }))} />
             </div>
             {form.montant_initial > 0 && (
               <div className="xl:col-span-3 bg-brand-50 border border-brand-200 rounded-lg p-3 grid grid-cols-3 gap-4 text-sm">
@@ -129,8 +130,8 @@ export default function NouveauMarchePage() {
             </div>
             <div>
               <label className="label">Délai contractuel (jours) *</label>
-              <input type="number" min={1} className="input" value={form.delai_contractuel}
-                onChange={set('delai_contractuel')} required />
+              <NumberInput min={1} className="input" value={form.delai_contractuel}
+                onChange={v => setForm(f => ({ ...f, delai_contractuel: v }))} />
             </div>
             <div>
               <label className="label">Date fin prévue (calculée)</label>

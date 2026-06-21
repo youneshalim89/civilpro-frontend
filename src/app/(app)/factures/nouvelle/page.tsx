@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facturesService, marchesService, articlesService } from '@/lib/api';
+import NumberInput from '@/components/NumberInput';
 
 type Ligne = { designation: string; unite: string; quantite_executee: number; prix_unitaire: number; article_id?: string; };
 const emptyLigne = (): Ligne => ({ designation: '', unite: '', quantite_executee: 0, prix_unitaire: 0 });
@@ -116,8 +117,8 @@ export default function NouvelleFacturePage() {
             </div>
             <div>
               <label className="label">Taux TVA (%)</label>
-              <input type="number" step="0.01" min={0} max={100} className="input"
-                value={form.taux_tva} onChange={set('taux_tva')} />
+              <NumberInput min={0} max={100} className="input"
+                value={form.taux_tva} onChange={v => setForm(f => ({ ...f, taux_tva: v }))} />
             </div>
             <div className="xl:col-span-2">
               <label className="label">Notes / Observations</label>
@@ -172,12 +173,12 @@ export default function NouvelleFacturePage() {
                         onChange={setLigne(i, 'unite')} placeholder="m³" />
                     </td>
                     <td className="table-cell">
-                      <input type="number" step="0.001" min={0} className="input text-sm py-1"
-                        value={l.quantite_executee} onChange={setLigne(i, 'quantite_executee')} />
+                      <NumberInput min={0} className="input text-sm py-1"
+                        value={l.quantite_executee} onChange={v => setLignes(ls => ls.map((ll, idx) => idx === i ? { ...ll, quantite_executee: v } : ll))} />
                     </td>
                     <td className="table-cell">
-                      <input type="number" step="0.01" min={0} className="input text-sm py-1"
-                        value={l.prix_unitaire} onChange={setLigne(i, 'prix_unitaire')} />
+                      <NumberInput min={0} className="input text-sm py-1"
+                        value={l.prix_unitaire} onChange={v => setLignes(ls => ls.map((ll, idx) => idx === i ? { ...ll, prix_unitaire: v } : ll))} />
                     </td>
                     <td className="table-cell text-right font-semibold text-brand-700">
                       {(l.quantite_executee * l.prix_unitaire).toLocaleString('fr-FR', { minimumFractionDigits: 2 })}

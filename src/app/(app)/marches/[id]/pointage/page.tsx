@@ -7,6 +7,7 @@ import { ArrowLeft, Plus, Trash2, Users, Truck, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { marchesService, pointageService, materielService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import NumberInput from '@/components/NumberInput';
 import type { PointagePersonnel, JournalMateriel } from '@/lib/api';
 
 const FONCTIONS = ['Chef de chantier', 'Conducteur engin', 'Chauffeur', 'Manœuvre', 'Mécanicien', 'Gardien', 'Ingénieur', 'Autre'];
@@ -159,11 +160,11 @@ export default function PointagePage() {
                   onChange={e => setPersForm(f => ({ ...f, fonction: e.target.value }))}>
                   {FONCTIONS.map(fn => <option key={fn} value={fn}>{fn}</option>)}
                 </select>
-                <input type="number" step="0.5" className="input text-sm" placeholder="Heures" value={persForm.heures_travaillees}
-                  onChange={e => setPersForm(f => ({ ...f, heures_travaillees: parseFloat(e.target.value) || 0 }))} />
+                <NumberInput className="input text-sm" placeholder="Heures" value={persForm.heures_travaillees}
+                  onChange={v => setPersForm(f => ({ ...f, heures_travaillees: v }))} />
               </div>
-              <input type="number" step="0.5" className="input text-sm" placeholder="Taux horaire (DH/h)" value={persForm.taux_horaire}
-                onChange={e => setPersForm(f => ({ ...f, taux_horaire: parseFloat(e.target.value) || 0 }))} />
+              <NumberInput className="input text-sm" placeholder="Taux horaire (DH/h)" value={persForm.taux_horaire}
+                onChange={v => setPersForm(f => ({ ...f, taux_horaire: v }))} />
               {persForm.taux_horaire > 0 && (
                 <p className="text-xs text-gray-500">
                   Charge générée : <strong className="text-brand-600">{fmt.currency(persForm.heures_travaillees * persForm.taux_horaire)}</strong> (ajoutée automatiquement aux charges journalières)
@@ -245,13 +246,13 @@ export default function PointagePage() {
                 {ENGINS_PREDEFINIS.map(e => <option key={e} value={e} />)}
               </datalist>
               <div className="grid grid-cols-2 gap-3">
-                <input type="number" step="0.5" className="input text-sm" placeholder="Heures travaillées" value={matForm.heures_travaillees}
-                  onChange={e => setMatForm(f => ({ ...f, heures_travaillees: parseFloat(e.target.value) || 0 }))} />
-                <input type="number" step="0.1" className="input text-sm" placeholder="Gasoil (L)" value={matForm.gasoil_consomme}
-                  onChange={e => setMatForm(f => ({ ...f, gasoil_consomme: parseFloat(e.target.value) || 0 }))} />
+                <NumberInput className="input text-sm" placeholder="Heures travaillées" value={matForm.heures_travaillees}
+                  onChange={v => setMatForm(f => ({ ...f, heures_travaillees: v }))} />
+                <NumberInput className="input text-sm" placeholder="Gasoil (L)" value={matForm.gasoil_consomme}
+                  onChange={v => setMatForm(f => ({ ...f, gasoil_consomme: v }))} />
               </div>
-              <input type="number" step="0.5" className="input text-sm" placeholder="Taux horaire (DH/h)" value={matForm.taux_horaire}
-                onChange={e => setMatForm(f => ({ ...f, taux_horaire: parseFloat(e.target.value) || 0 }))} />
+              <NumberInput className="input text-sm" placeholder="Taux horaire (DH/h)" value={matForm.taux_horaire}
+                onChange={v => setMatForm(f => ({ ...f, taux_horaire: v }))} />
               {matForm.taux_horaire > 0 && (
                 <p className="text-xs text-gray-500">
                   Charge générée : <strong className="text-brand-600">{fmt.currency(matForm.heures_travaillees * matForm.taux_horaire)}</strong> (ajoutée automatiquement aux charges journalières)

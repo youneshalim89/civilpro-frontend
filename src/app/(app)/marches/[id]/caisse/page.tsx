@@ -7,6 +7,7 @@ import { ArrowLeft, Plus, Trash2, Wallet, TrendingUp, TrendingDown, Scale } from
 import toast from 'react-hot-toast';
 import { marchesService, caisseService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import NumberInput from '@/components/NumberInput';
 
 const CATEGORIES: Record<string, { label: string; color: string }> = {
   decompte:         { label: 'Décompte',         color: 'bg-blue-100 text-blue-700' },
@@ -153,8 +154,8 @@ export default function CaissePage() {
             </div>
             <div>
               <label className="label">Montant (DH) *</label>
-              <input type="number" step="0.01" className="input text-sm" value={form.montant}
-                onChange={e => setForm(f => ({ ...f, montant: parseFloat(e.target.value) || 0 }))} />
+              <NumberInput className="input text-sm" value={form.montant}
+                onChange={v => setForm(f => ({ ...f, montant: v }))} />
             </div>
             <div className="col-span-3">
               <label className="label">Notes</label>

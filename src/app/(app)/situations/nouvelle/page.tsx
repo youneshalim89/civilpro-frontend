@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { situationsService, marchesService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import NumberInput from '@/components/NumberInput';
 
 export default function NouvelleSituationPage() {
   const router = useRouter();
@@ -207,10 +208,10 @@ export default function NouvelleSituationPage() {
                           <td className="table-cell text-right text-gray-500">{fmt.number(l.quantite_prevue)}</td>
                           <td className="table-cell text-right text-gray-500">{fmt.number(l.quantite_cumulee_avant)}</td>
                           <td className="table-cell bg-brand-50/30">
-                            <input type="number" min={0} step="0.001"
+                            <NumberInput min={0}
                               className="input text-xs py-1 text-right w-28 border-brand-300"
                               value={l.quantite_periode}
-                              onChange={e => setQtePeriode(i, parseFloat(e.target.value) || 0)} />
+                              onChange={v => setQtePeriode(i, v)} />
                           </td>
                           <td className="table-cell text-right font-medium">{fmt.number(qCumulee)}</td>
                           <td className="table-cell text-right text-gray-500 text-xs">{fmt.currency(l.prix_unitaire, '')}</td>

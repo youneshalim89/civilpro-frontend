@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { articlesService, marchesService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import NumberInput from '@/components/NumberInput';
 import type { ArticleMarche } from '@/lib/api';
 
 type ImportRow = { code_article: string; designation: string; unite: string; quantite_prevue: number; prix_unitaire: number };
@@ -417,13 +418,13 @@ function ArticleForm({ marcheId, initial, onClose, onSaved }: {
         </div>
         <div>
           <label className="label">Quantité prévue</label>
-          <input className="input text-sm" type="number" step="0.001" value={form.quantite_prevue}
-            onChange={e => setForm(f => ({ ...f, quantite_prevue: parseFloat(e.target.value) || 0 }))} />
+          <NumberInput className="input text-sm" value={form.quantite_prevue}
+            onChange={v => setForm(f => ({ ...f, quantite_prevue: v }))} />
         </div>
         <div>
           <label className="label">Prix unitaire (MAD)</label>
-          <input className="input text-sm" type="number" step="0.01" value={form.prix_unitaire}
-            onChange={e => setForm(f => ({ ...f, prix_unitaire: parseFloat(e.target.value) || 0 }))} />
+          <NumberInput className="input text-sm" value={form.prix_unitaire}
+            onChange={v => setForm(f => ({ ...f, prix_unitaire: v }))} />
         </div>
         <div>
           <label className="label">Montant calculé</label>

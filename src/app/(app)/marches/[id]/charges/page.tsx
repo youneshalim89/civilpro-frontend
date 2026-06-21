@@ -7,6 +7,7 @@ import { ArrowLeft, Save, Trash2, Plus, Truck, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { marchesService, chargesService, chargesJournalieresService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import NumberInput from '@/components/NumberInput';
 import type { ChargeMensuelle, ChargeJournaliere } from '@/lib/api';
 
 const CHAMPS: { key: keyof ChargeMensuelle; label: string }[] = [
@@ -166,15 +167,14 @@ export default function ChargesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">Objectif mensuel (DH)</label>
-              <input type="number" className="input text-sm" value={objectif}
-                onChange={e => setObjectif(parseFloat(e.target.value) || 0)} />
+              <NumberInput className="input text-sm" value={objectif} onChange={setObjectif} />
             </div>
             <div />
             {CHAMPS.map(c => (
               <div key={c.key}>
                 <label className="label">{c.label} (DH)</label>
-                <input type="number" className="input text-sm" value={form[c.key] || 0}
-                  onChange={e => setForm(f => ({ ...f, [c.key]: parseFloat(e.target.value) || 0 }))} />
+                <NumberInput className="input text-sm" value={form[c.key] || 0}
+                  onChange={v => setForm(f => ({ ...f, [c.key]: v }))} />
               </div>
             ))}
           </div>
@@ -263,8 +263,8 @@ export default function ChargesPage() {
 
               <div>
                 <label className="label">{jourForm.categorie === 'location_materiel' ? 'Nb jours' : 'Quantité'}</label>
-                <input type="number" step="0.01" className="input text-sm" value={jourForm.quantite}
-                  onChange={e => setJourForm(f => ({ ...f, quantite: parseFloat(e.target.value) || 0 }))} />
+                <NumberInput className="input text-sm" value={jourForm.quantite}
+                  onChange={v => setJourForm(f => ({ ...f, quantite: v }))} />
               </div>
               <div>
                 <label className="label">Unité</label>
@@ -273,8 +273,8 @@ export default function ChargesPage() {
               </div>
               <div>
                 <label className="label">{jourForm.categorie === 'location_materiel' ? 'Prix / jour' : 'Prix unitaire'}</label>
-                <input type="number" step="0.01" className="input text-sm" value={jourForm.prix_unitaire}
-                  onChange={e => setJourForm(f => ({ ...f, prix_unitaire: parseFloat(e.target.value) || 0 }))} />
+                <NumberInput className="input text-sm" value={jourForm.prix_unitaire}
+                  onChange={v => setJourForm(f => ({ ...f, prix_unitaire: v }))} />
               </div>
             </div>
             <div className="flex items-center justify-between mt-4">

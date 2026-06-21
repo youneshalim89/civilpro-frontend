@@ -7,6 +7,7 @@ import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { commandesService, marchesService, articlesService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import NumberInput from '@/components/NumberInput';
 
 interface Ligne {
   article_id:    string;
@@ -144,8 +145,8 @@ export default function NouvelleCommandePage() {
             </div>
             <div>
               <label className="label">Taux TVA (%)</label>
-              <input type="number" className="input text-sm" value={form.taux_tva}
-                onChange={e => setForm(f => ({ ...f, taux_tva: parseFloat(e.target.value) || 0 }))} />
+              <NumberInput className="input text-sm" value={form.taux_tva}
+                onChange={v => setForm(f => ({ ...f, taux_tva: v }))} />
             </div>
             <div className="col-span-2 xl:col-span-3">
               <label className="label">Notes</label>
@@ -198,12 +199,12 @@ export default function NouvelleCommandePage() {
                         onChange={e => setLigneField(i, 'unite', e.target.value)} />
                     </td>
                     <td className="table-cell w-28">
-                      <input type="number" step="0.001" className="input text-xs py-1.5 text-right" value={l.quantite}
-                        onChange={e => setLigneField(i, 'quantite', parseFloat(e.target.value) || 0)} />
+                      <NumberInput className="input text-xs py-1.5 text-right" value={l.quantite}
+                        onChange={v => setLigneField(i, 'quantite', v)} />
                     </td>
                     <td className="table-cell w-36">
-                      <input type="number" step="0.01" className="input text-xs py-1.5 text-right" value={l.prix_unitaire}
-                        onChange={e => setLigneField(i, 'prix_unitaire', parseFloat(e.target.value) || 0)} />
+                      <NumberInput className="input text-xs py-1.5 text-right" value={l.prix_unitaire}
+                        onChange={v => setLigneField(i, 'prix_unitaire', v)} />
                     </td>
                     <td className="table-cell w-36 text-right font-medium text-sm">
                       {fmt.currency(l.quantite * l.prix_unitaire, '')}

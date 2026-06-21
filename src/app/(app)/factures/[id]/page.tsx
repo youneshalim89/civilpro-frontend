@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { facturesService } from '@/lib/api';
 import { fmt, STATUTS_FACTURE } from '@/lib/utils';
 import { exportFacturePDF } from '@/lib/pdf';
+import NumberInput from '@/components/NumberInput';
 
 export default function FactureDetailPage() {
   const { id }  = useParams<{ id: string }>();
@@ -224,8 +225,8 @@ export default function FactureDetailPage() {
             <div className="space-y-4">
               <div>
                 <label className="label">Montant payé (MAD) *</label>
-                <input type="number" step="0.01" min={0.01} max={solde + 0.01} className="input"
-                  value={montantPaye} onChange={e => setMontantPaye(parseFloat(e.target.value) || 0)} autoFocus />
+                <NumberInput min={0.01} max={solde + 0.01} className="input"
+                  value={montantPaye} onChange={setMontantPaye} autoFocus />
               </div>
               <div>
                 <label className="label">Référence de paiement</label>

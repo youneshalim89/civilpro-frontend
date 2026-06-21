@@ -7,6 +7,7 @@ import { ArrowLeft, Plus, Trash2, Fuel, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { marchesService, materielService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import NumberInput from '@/components/NumberInput';
 import type { JournalMateriel } from '@/lib/api';
 
 const STATUTS: Record<string, { label: string; color: string }> = {
@@ -139,13 +140,13 @@ export default function MaterielPage() {
             </div>
             <div>
               <label className="label">Heures travaillées</label>
-              <input type="number" step="0.5" className="input text-sm" value={form.heures_travaillees}
-                onChange={e => setForm(f => ({ ...f, heures_travaillees: parseFloat(e.target.value) || 0 }))} />
+              <NumberInput className="input text-sm" value={form.heures_travaillees}
+                onChange={v => setForm(f => ({ ...f, heures_travaillees: v }))} />
             </div>
             <div>
               <label className="label">Gasoil consommé (L)</label>
-              <input type="number" step="0.1" className="input text-sm" value={form.gasoil_consomme}
-                onChange={e => setForm(f => ({ ...f, gasoil_consomme: parseFloat(e.target.value) || 0 }))} />
+              <NumberInput className="input text-sm" value={form.gasoil_consomme}
+                onChange={v => setForm(f => ({ ...f, gasoil_consomme: v }))} />
             </div>
             <div>
               <label className="label">Statut</label>

@@ -7,6 +7,7 @@ import { ArrowLeft, Plus, Trash2, AlertTriangle, HardHat } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { marchesService, avancementPhysiqueService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import NumberInput from '@/components/NumberInput';
 
 export default function AvancementPhysiquePage() {
   const { id } = useParams<{ id: string }>();
@@ -155,10 +156,10 @@ export default function AvancementPhysiquePage() {
                         <td className="table-cell text-gray-500 text-xs">{l.unite}</td>
                         <td className="table-cell text-right text-gray-500">{fmt.number(l.quantite_prevue)}</td>
                         <td className="table-cell bg-blue-50/30">
-                          <input type="number" min={0} step="0.001"
+                          <NumberInput min={0}
                             className="input text-xs py-1 text-right w-32 border-blue-300"
                             value={l.quantite_executee_cumul}
-                            onChange={e => setQte(i, parseFloat(e.target.value) || 0)} />
+                            onChange={v => setQte(i, v)} />
                         </td>
                         <td className="table-cell text-right">
                           <span className={`text-xs font-medium ${pct >= 100 ? 'text-green-600' : 'text-gray-600'}`}>{pct.toFixed(1)}%</span>

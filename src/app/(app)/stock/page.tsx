@@ -5,6 +5,7 @@ import { Package, AlertTriangle, TrendingDown, Plus, ArrowDown, ArrowUp, FileDow
 import toast from 'react-hot-toast';
 import { fmt, exportCSV } from '@/lib/utils';
 import { exportListPDF } from '@/lib/pdf';
+import NumberInput from '@/components/NumberInput';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '';
@@ -250,8 +251,8 @@ export default function StockPage() {
                     Stock actuel : {mouvement.materiau.quantite_stock}
                   </span>
                 </label>
-                <input type="number" min={0.001} step={0.001} className="input"
-                  value={qte} onChange={e => setQte(parseFloat(e.target.value) || 0)} autoFocus />
+                <NumberInput min={0.001} className="input"
+                  value={qte} onChange={setQte} autoFocus />
               </div>
               <div>
                 <label className="label">Motif</label>
