@@ -22,6 +22,7 @@ const CHAMPS_CHARGE: (keyof ChargeMensuelle)[] = [
 export default function MarcheDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [showInfos, setShowInfos] = useState(false);
+  const [showIndicateurs, setShowIndicateurs] = useState(false);
 
   const { data: marche, isLoading } = useQuery({
     queryKey: ['marche', id],
@@ -188,14 +189,19 @@ export default function MarcheDetailPage() {
 
         {/* Indicateurs financiers */}
         <div className="card p-5">
-          <h3 className="font-semibold text-gray-800 mb-4">Indicateurs financiers</h3>
-          <div className="space-y-4">
-            <FinIndicator label="Montant initial"    value={marche.montant_initial} />
-            <FinIndicator label="Montant actualisé"  value={marche.montant_actualise || marche.montant_initial} />
-            <FinIndicator label="Total commandé"     value={marche.total_commandes || 0} color="blue" />
-            <FinIndicator label="Total facturé"      value={marche.total_facture || 0} color="purple" />
-            <FinIndicator label="Total payé"         value={marche.total_paye || 0} color="green" />
-          </div>
+          <button onClick={() => setShowIndicateurs(v => !v)} className="w-full flex items-center justify-between">
+            <h3 className="font-semibold text-gray-800">Indicateurs financiers</h3>
+            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showIndicateurs ? 'rotate-180' : ''}`} />
+          </button>
+          {showIndicateurs && (
+            <div className="space-y-4 mt-4">
+              <FinIndicator label="Montant initial"    value={marche.montant_initial} />
+              <FinIndicator label="Montant actualisé"  value={marche.montant_actualise || marche.montant_initial} />
+              <FinIndicator label="Total commandé"     value={marche.total_commandes || 0} color="blue" />
+              <FinIndicator label="Total facturé"      value={marche.total_facture || 0} color="purple" />
+              <FinIndicator label="Total payé"         value={marche.total_paye || 0} color="green" />
+            </div>
+          )}
         </div>
       </div>
 
