@@ -8,10 +8,20 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Groupement manuel par milliers avec une espace ASCII normale — toLocaleString('fr-FR')
+// utilise une espace fine insécable (U+202F) qui s'affiche mal/incohérente selon la police.
+function groupThousands(n: number, decimals: number): string {
+  const neg = n < 0;
+  const fixed = Math.abs(n).toFixed(decimals);
+  const [intPart, decPart] = fixed.split('.');
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return `${neg ? '-' : ''}${grouped}${decPart ? ',' + decPart : ''}`;
+}
+
 export const fmt = {
   currency: (n: number | string | null | undefined, suffix = 'MAD') => {
     const num = parseFloat(String(n || 0));
-    return `${num.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${suffix}`;
+    return `${groupThousands(num, 2)} ${suffix}`;
   },
   pct: (n: number | string | null | undefined) => {
     return `${parseFloat(String(n || 0)).toFixed(1)} %`;
@@ -27,7 +37,7 @@ export const fmt = {
     catch { return '—'; }
   },
   number: (n: number | string | null | undefined) => {
-    return parseFloat(String(n || 0)).toLocaleString('fr-FR');
+    return groupThousands(parseFloat(String(n || 0)), 0);
   },
 };
 
