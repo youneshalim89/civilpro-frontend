@@ -58,9 +58,6 @@ export default function MarcheDetailPage() {
   const difference    = montantEntree - montantSortie;
 
   const tabs = [
-    { label: 'Caisse Générale',     href: `/marches/${id}/caisse`,      icon: Coins,        count: null },
-    { label: 'Feuille de pointage', href: `/marches/${id}/pointage`,    icon: ClipboardCheck, count: null },
-    { label: 'Charges mensuelles',  href: `/marches/${id}/charges`,     icon: Wallet,       count: null },
     { label: 'Bordereau des prix',  href: `/marches/${id}/articles`,   icon: FileText,    count: marche.nb_articles },
     { label: 'Commandes',           href: `/commandes?marche_id=${id}`, icon: ShoppingCart, count: marche.nb_commandes },
     { label: 'Factures',            href: `/factures?marche_id=${id}`,  icon: Receipt,      count: marche.nb_factures },
@@ -100,6 +97,40 @@ export default function MarcheDetailPage() {
             <Edit2 className="w-4 h-4" /> Modifier
           </Link>
         </div>
+      </div>
+
+      {/* Accès rapide — en tête de page */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Link href={`/marches/${id}/caisse`}
+          className="card p-5 flex items-center gap-4 border-2 border-brand-200 hover:border-brand-400 hover:shadow-md transition-all">
+          <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Coins className="w-6 h-6 text-brand-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-800">Caisse Générale</p>
+            <p className="text-xs text-gray-400">Entrées, sorties, solde</p>
+          </div>
+        </Link>
+        <Link href={`/marches/${id}/pointage`}
+          className="card p-5 flex items-center gap-4 border-2 border-brand-200 hover:border-brand-400 hover:shadow-md transition-all">
+          <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center flex-shrink-0">
+            <ClipboardCheck className="w-6 h-6 text-brand-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-800">Feuille de Pointage</p>
+            <p className="text-xs text-gray-400">Personnel et matériel par jour</p>
+          </div>
+        </Link>
+        <Link href={`/marches/${id}/charges`}
+          className="card p-5 flex items-center gap-4 border-2 border-brand-200 hover:border-brand-400 hover:shadow-md transition-all">
+          <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Wallet className="w-6 h-6 text-brand-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-800">Charges Mensuelles</p>
+            <p className="text-xs text-gray-400">Fixes, location, matériaux</p>
+          </div>
+        </Link>
       </div>
 
       {/* Synthèse financière — Entrée / Sortie / Différence */}
