@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, Trash2, Plus, Truck, Package } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Plus, Truck, Package, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { marchesService, chargesService, chargesJournalieresService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
@@ -141,14 +141,19 @@ export default function ChargesPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-4">
-        <Link href={`/marches/${id}`} className="p-2 hover:bg-gray-100 rounded-lg">
-          <ArrowLeft className="w-5 h-5 text-gray-500" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Charges Mensuelles</h1>
-          <p className="text-sm text-gray-500">{marche?.numero_marche} — {marche?.objet}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link href={`/marches/${id}`} className="p-2 hover:bg-gray-100 rounded-lg">
+            <ArrowLeft className="w-5 h-5 text-gray-500" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Charges Mensuelles</h1>
+            <p className="text-sm text-gray-500">{marche?.numero_marche} — {marche?.objet}</p>
+          </div>
         </div>
+        <Link href={`/marches/${id}/entretien-materiel`} className="btn-secondary text-sm flex items-center gap-2">
+          <Wrench className="w-4 h-4" /> Entretien Matériel
+        </Link>
       </div>
 
       {/* Sélecteur de mois */}

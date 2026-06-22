@@ -351,6 +351,28 @@ export const chargesJournalieresService = {
   delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/charges-journalieres/${id}`),
 };
 
+export interface EntretienMateriel {
+  id: string;
+  marche_id: string;
+  date_entretien: string;
+  engin: string;
+  type_entretien: string;
+  designation?: string;
+  fournisseur?: string;
+  montant: number;
+  avance: number;
+  reste_a_regler: number;
+  notes?: string;
+  created_by_nom?: string;
+}
+
+export const entretienMaterielService = {
+  list:   (marcheId: string)            => api.get<ApiResponse<EntretienMateriel[]>>(`/marches/${marcheId}/entretien-materiel`),
+  create: (marcheId: string, data: any) => api.post<ApiResponse<EntretienMateriel>>(`/marches/${marcheId}/entretien-materiel`, data),
+  updateAvance: (marcheId: string, id: string, avance: number) => api.patch<ApiResponse<EntretienMateriel>>(`/marches/${marcheId}/entretien-materiel/${id}`, { avance }),
+  delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/entretien-materiel/${id}`),
+};
+
 export const caisseService = {
   get:    (marcheId: string)            => api.get<ApiResponse<{ historique: MouvementCaisse[]; synthese: any }>>(`/marches/${marcheId}/caisse`),
   create: (marcheId: string, data: any) => api.post<ApiResponse<MouvementCaisse>>(`/marches/${marcheId}/caisse`, data),
