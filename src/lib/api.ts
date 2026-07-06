@@ -68,6 +68,9 @@ export interface Marche {
   taux_retenue_garantie: number;
   chef_marche_id?: string;
   chef_marche_nom?: string;
+  projet_id?: string;
+  projet_nom?: string;
+  projet_code?: string;
   bq_total?: number;
   nb_articles?: number;
   nb_commandes?: number;
@@ -277,6 +280,16 @@ export const authService = {
   me:     () => api.get<ApiResponse<User>>('/auth/me'),
 };
 
+export interface ProjetLite {
+  id: string;
+  nom: string;
+  code_projet: string;
+}
+
+export const projetsService = {
+  list: (params?: any) => api.get<ApiResponse<ProjetLite[]>>('/projets', { params }),
+};
+
 export const marchesService = {
   dashboard: ()                          => api.get<ApiResponse<any>>('/marches/dashboard'),
   list:      (params?: any)              => api.get<ApiResponse<Marche[]>>('/marches', { params }),
@@ -365,32 +378,6 @@ export interface EntretienMateriel {
   notes?: string;
   created_by_nom?: string;
 }
-
-export const entretienMaterielService = {
-  list:   (marcheId: string)            => api.get<ApiResponse<EntretienMateriel[]>>(`/marches/${marcheId}/entretien-materiel`),
-  create: (marcheId: string, data: any) => api.post<ApiResponse<EntretienMateriel>>(`/marches/${marcheId}/entretien-materiel`, data),
-  updateAvance: (marcheId: string, id: string, avance: number) => api.patch<ApiResponse<EntretienMateriel>>(`/marches/${marcheId}/entretien-materiel/${id}`, { avance }),
-  delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/entretien-materiel/${id}`),
-};
-
-export const caisseService = {
-  get:    (marcheId: string)            => api.get<ApiResponse<{ historique: MouvementCaisse[]; synthese: any }>>(`/marches/${marcheId}/caisse`),
-  create: (marcheId: string, data: any) => api.post<ApiResponse<MouvementCaisse>>(`/marches/${marcheId}/caisse`, data),
-  delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/caisse/${id}`),
-};
-
-export const pointageService = {
-  list:   (marcheId: string, date?: string) =>
-    api.get<ApiResponse<PointagePersonnel[]>>(`/marches/${marcheId}/pointage`, { params: date ? { date } : {} }),
-  create: (marcheId: string, data: any) => api.post<ApiResponse<PointagePersonnel>>(`/marches/${marcheId}/pointage`, data),
-  delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/pointage/${id}`),
-};
-
-export const materielService = {
-  list:   (marcheId: string)            => api.get<ApiResponse<JournalMateriel[]>>(`/marches/${marcheId}/materiel`),
-  create: (marcheId: string, data: any) => api.post<ApiResponse<JournalMateriel>>(`/marches/${marcheId}/materiel`, data),
-  delete: (marcheId: string, id: string) => api.delete(`/marches/${marcheId}/materiel/${id}`),
-};
 
 export const documentsService = {
   list:       (params?: any)             => api.get('/documents', { params }),
