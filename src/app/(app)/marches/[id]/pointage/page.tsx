@@ -5,20 +5,30 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2, Users, Truck, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { marchesService, pointageService, materielService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import { FONCTIONS_POINTAGE as FONCTIONS } from '@/lib/constants';
+import { EnginsDatalist } from '@/components/marches/EnginsDatalist';
+import { Card, CardHeader, Badge, Table, Button } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
 import NumberInput from '@/components/NumberInput';
 import type { PointagePersonnel, JournalMateriel } from '@/lib/api';
 
-const FONCTIONS = ['Chef de chantier', 'Conducteur engin', 'Chauffeur', 'Manœuvre', 'Mécanicien', 'Gardien', 'Ingénieur', 'Autre'];
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
-const ENGINS_PREDEFINIS = [
-  'MAN 8x4', 'Pelle hydraulique sur pneu 318', 'JCB', 'Camion malaxeur 8x4',
-  'Camion benne 7m³', 'Niveleuse', 'Compacteur 12T', 'Pick up A80', 'Dokker A48',
-  'Camion-citerne', 'Chargeuse', 'Poclain 318',
-];
+// Formate une date en "YYYY-MM-DD" à partir de ses composants LOCAUX (pas UTC).
+// `date_jour` (colonne DATE PostgreSQL) revient sérialisé en chaîne ISO UTC
+// (ex. "2026-07-05T23:00:00.000Z" pour un 6 juillet stocké tel quel) — une
+// comparaison naïve par découpage de chaîne (`.slice(0, 10)`) décale donc le
+// jour d'un pointage "aujourd'hui" selon le fuseau horaire. En reconstruisant
+// la date locale des deux côtés de la comparaison, le décalage disparaît,
+// sans toucher au backend ni au schéma.
+const toLocalDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => toLocalDateStr(new Date());
 
 export default function PointagePage() {
   const { id } = useParams<{ id: string }>();
@@ -32,23 +42,24 @@ export default function PointagePage() {
 
   const { data: marche } = useQuery({
     queryKey: ['marche', id],
-    queryFn:  () => marchesService.get(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${id}`).then(r => r.data),
   });
 
   const { data: persData, isLoading: loadingPers } = useQuery({
     queryKey: ['pointage', id, date],
-    queryFn:  () => pointageService.list(id, date).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${id}/pointage?date=${date}`).then(r => r.data),
   });
   const personnel: PointagePersonnel[] = persData || [];
 
   const { data: matData, isLoading: loadingMat } = useQuery({
     queryKey: ['materiel', id],
-    queryFn:  () => materielService.list(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${id}/materiel`).then(r => r.data),
   });
-  const materielJour: JournalMateriel[] = (matData || []).filter(j => j.date_jour?.slice(0, 10) === date);
+  const materielJour: JournalMateriel[] = (matData || []).filter((j: JournalMateriel) => j.date_jour && toLocalDateStr(new Date(j.date_jour)) === date);
 
   const createPersMut = useMutation({
-    mutationFn: () => pointageService.create(id, { ...persForm, date_jour: date }),
+    mutationFn: () => apiFetch(`/marches/${id}/pointage`, { method: 'POST', body: JSON.stringify({ ...persForm, date_jour: date }) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => {
       qc.invalidateQueries({ queryKey: ['pointage', id, date] });
       toast.success('Personnel pointé');
@@ -59,12 +70,14 @@ export default function PointagePage() {
   });
 
   const deletePersMut = useMutation({
-    mutationFn: (pid: string) => pointageService.delete(id, pid),
+    mutationFn: (pid: string) => apiFetch(`/marches/${id}/pointage/${pid}`, { method: 'DELETE' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['pointage', id, date] }); toast.success('Supprimé'); },
   });
 
   const createMatMut = useMutation({
-    mutationFn: () => materielService.create(id, { ...matForm, date_jour: date }),
+    mutationFn: () => apiFetch(`/marches/${id}/materiel`, { method: 'POST', body: JSON.stringify({ ...matForm, date_jour: date }) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => {
       qc.invalidateQueries({ queryKey: ['materiel', id] });
       toast.success('Engin pointé');
@@ -75,7 +88,8 @@ export default function PointagePage() {
   });
 
   const deleteMatMut = useMutation({
-    mutationFn: (mid: string) => materielService.delete(id, mid),
+    mutationFn: (mid: string) => apiFetch(`/marches/${id}/materiel/${mid}`, { method: 'DELETE' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['materiel', id] }); toast.success('Supprimé'); },
   });
 
@@ -96,6 +110,52 @@ export default function PointagePage() {
     a.href = url; a.download = `Pointage_${marche?.numero_marche}_${date}.csv`; a.click();
   };
 
+  const personnelColumns: TableColumn<PointagePersonnel>[] = [
+    { key: 'nom_personnel', header: 'Nom', render: (p) => <span className="font-medium">{p.nom_personnel}</span> },
+    { key: 'fonction', header: 'Fonction', render: (p) => <span className="text-gray-500">{p.fonction || '—'}</span> },
+    { key: 'heures_travaillees', header: 'Heures', align: 'right', render: (p) => <span className="font-mono">{p.heures_travaillees} h</span> },
+    {
+      key: 'cout', header: 'Coût', align: 'right',
+      render: (p) => <span className="font-mono text-brand-600">{Number(p.taux_horaire) > 0 ? fmt.currency(p.heures_travaillees * p.taux_horaire) : '—'}</span>,
+    },
+    {
+      key: 'present', header: 'Présent',
+      render: (p) => <Badge tone="gray" className={p.present ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>{p.present ? 'Présent' : 'Absent'}</Badge>,
+    },
+    {
+      key: 'actions', header: '',
+      render: (p) => (
+        <button onClick={() => { if (confirm('Supprimer ?')) deletePersMut.mutate(p.id); }}
+          className="p-1 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+      ),
+    },
+  ];
+
+  const materielColumns: TableColumn<JournalMateriel>[] = [
+    { key: 'engin', header: 'Engin', render: (j) => <span className="font-medium">{j.engin}</span> },
+    { key: 'heures_travaillees', header: 'Heures', align: 'right', render: (j) => <span className="font-mono">{j.heures_travaillees} h</span> },
+    { key: 'gasoil_consomme', header: 'Gasoil', align: 'right', render: (j) => <span className="font-mono">{j.gasoil_consomme} L</span> },
+    {
+      key: 'cout', header: 'Coût', align: 'right',
+      render: (j) => <span className="font-mono text-brand-600">{Number(j.taux_horaire) > 0 ? fmt.currency(j.heures_travaillees * j.taux_horaire) : '—'}</span>,
+    },
+    {
+      key: 'statut', header: 'Statut',
+      render: (j) => (
+        <Badge tone="gray" className={j.statut === 'panne' ? 'bg-red-100 text-red-700' : j.statut === 'entretien' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}>
+          {j.statut}
+        </Badge>
+      ),
+    },
+    {
+      key: 'actions', header: '',
+      render: (j) => (
+        <button onClick={() => { if (confirm('Supprimer ?')) deleteMatMut.mutate(j.id); }}
+          className="p-1 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -108,48 +168,42 @@ export default function PointagePage() {
             <p className="text-sm text-gray-500">{marche?.numero_marche} — {marche?.objet}</p>
           </div>
         </div>
-        <button onClick={exportCSV} className="btn-secondary text-sm flex items-center gap-2">
-          <FileDown className="w-4 h-4" /> Exporter
-        </button>
+        <Button variant="secondary" onClick={exportCSV} icon={<FileDown className="w-4 h-4" />}>Exporter</Button>
       </div>
 
       {/* Sélecteur de date */}
-      <div className="card p-4 flex items-center gap-4">
+      <Card className="p-4 flex items-center gap-4">
         <label className="label mb-0 whitespace-nowrap">Date</label>
         <input type="date" className="input text-sm w-48" value={date} onChange={e => setDate(e.target.value)} />
-      </div>
+      </Card>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="card p-4 border-l-4 border-blue-400">
+        <Card className="p-4 border-l-4 border-blue-400">
           <p className="text-xs text-gray-500">Personnel présent</p>
           <p className="text-2xl font-bold text-blue-600 mt-1">{presents} / {personnel.length}</p>
-        </div>
-        <div className="card p-4">
+        </Card>
+        <Card className="p-4">
           <p className="text-xs text-gray-500">Heures personnel</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{fmt.number(totalHeuresP)} h</p>
-        </div>
-        <div className="card p-4 border-l-4 border-amber-400">
+        </Card>
+        <Card className="p-4 border-l-4 border-amber-400">
           <p className="text-xs text-gray-500">Engins sur site</p>
           <p className="text-2xl font-bold text-amber-600 mt-1">{materielJour.length}</p>
-        </div>
-        <div className="card p-4">
+        </Card>
+        <Card className="p-4">
           <p className="text-xs text-gray-500">Heures matériel</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{fmt.number(totalHeuresM)} h</p>
-        </div>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* ── Personnel ── */}
-        <div className="card overflow-hidden">
-          <div className="px-5 py-4 border-b flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-              <Users className="w-4 h-4 text-brand-500" /> Personnel — {date}
-            </h3>
-            <button onClick={() => setShowPersForm(!showPersForm)} className="btn-primary text-xs flex items-center gap-1 py-1.5 px-3">
-              <Plus className="w-3.5 h-3.5" /> Ajouter
-            </button>
-          </div>
+        <Card padded={false}>
+          <CardHeader
+            title={<span className="flex items-center gap-2"><Users className="w-4 h-4 text-brand-500" /> Personnel — {date}</span>}
+            action={<Button size="sm" onClick={() => setShowPersForm(!showPersForm)} icon={<Plus className="w-3.5 h-3.5" />}>Ajouter</Button>}
+          />
 
           {showPersForm && (
             <div className="p-4 border-b bg-gray-50 space-y-3">
@@ -177,74 +231,36 @@ export default function PointagePage() {
               <input className="input text-sm" placeholder="Observation" value={persForm.observation}
                 onChange={e => setPersForm(f => ({ ...f, observation: e.target.value }))} />
               <div className="flex gap-2">
-                <button onClick={() => { if (!persForm.nom_personnel) { toast.error('Nom requis'); return; } createPersMut.mutate(); }}
-                  disabled={createPersMut.isPending} className="btn-primary text-xs py-1.5">
+                <Button onClick={() => { if (!persForm.nom_personnel) { toast.error('Nom requis'); return; } createPersMut.mutate(); }}
+                  loading={createPersMut.isPending} size="sm">
                   {createPersMut.isPending ? 'Ajout...' : 'Enregistrer'}
-                </button>
-                <button onClick={() => setShowPersForm(false)} className="btn-secondary text-xs py-1.5">Annuler</button>
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setShowPersForm(false)}>Annuler</Button>
               </div>
             </div>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b text-xs">
-                <tr>
-                  <th className="table-header">Nom</th>
-                  <th className="table-header">Fonction</th>
-                  <th className="table-header text-right">Heures</th>
-                  <th className="table-header text-right">Coût</th>
-                  <th className="table-header">Présent</th>
-                  <th className="table-header"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {loadingPers && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400 text-xs animate-pulse">Chargement...</td></tr>}
-                {personnel.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="table-cell font-medium">{p.nom_personnel}</td>
-                    <td className="table-cell text-gray-500">{p.fonction || '—'}</td>
-                    <td className="table-cell text-right font-mono">{p.heures_travaillees} h</td>
-                    <td className="table-cell text-right font-mono text-brand-600">
-                      {Number(p.taux_horaire) > 0 ? fmt.currency(p.heures_travaillees * p.taux_horaire) : '—'}
-                    </td>
-                    <td className="table-cell">
-                      <span className={`badge ${p.present ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {p.present ? 'Présent' : 'Absent'}
-                      </span>
-                    </td>
-                    <td className="table-cell">
-                      <button onClick={() => { if (confirm('Supprimer ?')) deletePersMut.mutate(p.id); }}
-                        className="p-1 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
-                    </td>
-                  </tr>
-                ))}
-                {!loadingPers && !personnel.length && (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-xs">Aucun pointage pour ce jour</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          <Table<PointagePersonnel>
+            columns={personnelColumns}
+            data={personnel}
+            rowKey={(p) => p.id}
+            loading={loadingPers}
+            emptyMessage="Aucun pointage pour ce jour"
+          />
+        </Card>
 
         {/* ── Matériel ── */}
-        <div className="card overflow-hidden">
-          <div className="px-5 py-4 border-b flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-              <Truck className="w-4 h-4 text-brand-500" /> Matériel — {date}
-            </h3>
-            <button onClick={() => setShowMatForm(!showMatForm)} className="btn-primary text-xs flex items-center gap-1 py-1.5 px-3">
-              <Plus className="w-3.5 h-3.5" /> Ajouter
-            </button>
-          </div>
+        <Card padded={false}>
+          <CardHeader
+            title={<span className="flex items-center gap-2"><Truck className="w-4 h-4 text-brand-500" /> Matériel — {date}</span>}
+            action={<Button size="sm" onClick={() => setShowMatForm(!showMatForm)} icon={<Plus className="w-3.5 h-3.5" />}>Ajouter</Button>}
+          />
 
           {showMatForm && (
             <div className="p-4 border-b bg-gray-50 space-y-3">
               <input className="input text-sm" list="engins-pointage" placeholder="Engin *" value={matForm.engin}
                 onChange={e => setMatForm(f => ({ ...f, engin: e.target.value }))} />
-              <datalist id="engins-pointage">
-                {ENGINS_PREDEFINIS.map(e => <option key={e} value={e} />)}
-              </datalist>
+              <EnginsDatalist id="engins-pointage" />
               <div className="grid grid-cols-2 gap-3">
                 <NumberInput className="input text-sm" placeholder="Heures travaillées" value={matForm.heures_travaillees}
                   onChange={v => setMatForm(f => ({ ...f, heures_travaillees: v }))} />
@@ -267,55 +283,23 @@ export default function PointagePage() {
               <input className="input text-sm" placeholder="Observation" value={matForm.observation}
                 onChange={e => setMatForm(f => ({ ...f, observation: e.target.value }))} />
               <div className="flex gap-2">
-                <button onClick={() => { if (!matForm.engin) { toast.error('Engin requis'); return; } createMatMut.mutate(); }}
-                  disabled={createMatMut.isPending} className="btn-primary text-xs py-1.5">
+                <Button onClick={() => { if (!matForm.engin) { toast.error('Engin requis'); return; } createMatMut.mutate(); }}
+                  loading={createMatMut.isPending} size="sm">
                   {createMatMut.isPending ? 'Ajout...' : 'Enregistrer'}
-                </button>
-                <button onClick={() => setShowMatForm(false)} className="btn-secondary text-xs py-1.5">Annuler</button>
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setShowMatForm(false)}>Annuler</Button>
               </div>
             </div>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b text-xs">
-                <tr>
-                  <th className="table-header">Engin</th>
-                  <th className="table-header text-right">Heures</th>
-                  <th className="table-header text-right">Gasoil</th>
-                  <th className="table-header text-right">Coût</th>
-                  <th className="table-header">Statut</th>
-                  <th className="table-header"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {loadingMat && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400 text-xs animate-pulse">Chargement...</td></tr>}
-                {materielJour.map(j => (
-                  <tr key={j.id} className="hover:bg-gray-50">
-                    <td className="table-cell font-medium">{j.engin}</td>
-                    <td className="table-cell text-right font-mono">{j.heures_travaillees} h</td>
-                    <td className="table-cell text-right font-mono">{j.gasoil_consomme} L</td>
-                    <td className="table-cell text-right font-mono text-brand-600">
-                      {Number(j.taux_horaire) > 0 ? fmt.currency(j.heures_travaillees * j.taux_horaire) : '—'}
-                    </td>
-                    <td className="table-cell">
-                      <span className={`badge ${j.statut === 'panne' ? 'bg-red-100 text-red-700' : j.statut === 'entretien' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                        {j.statut}
-                      </span>
-                    </td>
-                    <td className="table-cell">
-                      <button onClick={() => { if (confirm('Supprimer ?')) deleteMatMut.mutate(j.id); }}
-                        className="p-1 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
-                    </td>
-                  </tr>
-                ))}
-                {!loadingMat && !materielJour.length && (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-xs">Aucun engin pointé ce jour</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          <Table<JournalMateriel>
+            columns={materielColumns}
+            data={materielJour}
+            rowKey={(j) => j.id}
+            loading={loadingMat}
+            emptyMessage="Aucun engin pointé ce jour"
+          />
+        </Card>
       </div>
     </div>
   );
