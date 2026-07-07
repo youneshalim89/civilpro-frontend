@@ -4,8 +4,13 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, DollarSign, Trash2, BarChart3 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { situationsService } from '@/lib/api';
 import { fmt, STATUTS_SITUATION } from '@/lib/utils';
+import { Card, Badge, Button, Loading } from '@/components/ui';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 const TYPE_LABELS: Record<string, string> = {
   provisoire: 'Décompte provisoire',
@@ -20,28 +25,25 @@ export default function SituationDetailPage() {
 
   const { data: situation, isLoading } = useQuery({
     queryKey: ['situation', id],
-    queryFn:  () => situationsService.get(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/situations/${id}`).then(r => r.data),
     enabled:  !!id,
   });
 
   const statutMut = useMutation({
-    mutationFn: (s: string) => situationsService.statut(id, { statut: s }),
+    mutationFn: (s: string) => apiFetch(`/situations/${id}/statut`, { method: 'PATCH', body: JSON.stringify({ statut: s }) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['situation', id] }); toast.success('Statut mis à jour'); },
     onError:    () => toast.error('Erreur lors de la mise à jour'),
   });
 
   const deleteMut = useMutation({
-    mutationFn: () => situationsService.delete(id),
+    mutationFn: () => apiFetch(`/situations/${id}`, { method: 'DELETE' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { toast.success('Décompte supprimé'); router.push('/situations'); },
-    onError:    (err: any) => toast.error(err.response?.data?.message || 'Erreur lors de la suppression'),
+    onError:    (err: any) => toast.error(err.message || 'Erreur lors de la suppression'),
   });
 
-  if (isLoading) return (
-    <div className="space-y-4 animate-pulse">
-      <div className="h-8 bg-gray-200 rounded w-1/3" />
-      <div className="card p-6 h-64 bg-gray-100" />
-    </div>
-  );
+  if (isLoading) return <Loading />;
   if (!situation) return <p className="text-gray-500">Décompte introuvable.</p>;
 
   const s  = situation;
@@ -57,7 +59,7 @@ export default function SituationDetailPage() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">Décompte N°{s.numero_situation}</h1>
-              <span className={`badge ${st?.color}`}>{st?.label}</span>
+              <Badge className={st?.color}>{st?.label}</Badge>
             </div>
             <p className="text-sm text-gray-500 mt-1">
               {s.numero_marche} — {s.marche_objet}
@@ -66,10 +68,10 @@ export default function SituationDetailPage() {
         </div>
         <div className="flex gap-2">
           {s.statut === 'en_cours' && (
-            <button onClick={() => { if (confirm('Marquer ce décompte comme approuvé et payé ?')) statutMut.mutate('paye'); }}
-              className="btn-primary text-sm flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700">
-              <DollarSign className="w-4 h-4" /> Marquer payé
-            </button>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" icon={<DollarSign className="w-4 h-4" />}
+              onClick={() => { if (confirm('Marquer ce décompte comme approuvé et payé ?')) statutMut.mutate('paye'); }}>
+              Marquer payé
+            </Button>
           )}
           <button onClick={() => {
             const msg = s.statut === 'paye'
@@ -79,15 +81,15 @@ export default function SituationDetailPage() {
           }} className="px-3 py-2 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-2">
             <Trash2 className="w-4 h-4" /> Supprimer
           </button>
-          <Link href={`/situations/recap/${s.marche_id}`} className="btn-secondary text-sm flex items-center gap-2">
-            <BarChart3 className="w-4 h-4" /> Récapitulatif
+          <Link href={`/situations/recap/${s.marche_id}`}>
+            <Button variant="secondary" size="sm" icon={<BarChart3 className="w-4 h-4" />}>Récapitulatif</Button>
           </Link>
         </div>
       </div>
 
       {/* Infos */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="card p-5 col-span-2">
+        <Card className="col-span-2">
           <h3 className="font-semibold text-gray-800 mb-4">Détails du décompte</h3>
           <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
             <InfoRow label="Type" value={TYPE_LABELS[s.type_situation] || s.type_situation} />
@@ -99,9 +101,9 @@ export default function SituationDetailPage() {
             <InfoRow label="Date paiement" value={s.date_paiement ? fmt.date(s.date_paiement) : '—'} />
             <InfoRow label="Observations" value={s.observations || '—'} />
           </div>
-        </div>
+        </Card>
 
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Récapitulatif financier</h3>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between"><span className="text-gray-500">Montant brut</span><span className="font-medium">{fmt.currency(s.montant_brut)}</span></div>
@@ -116,11 +118,11 @@ export default function SituationDetailPage() {
               <span>MONTANT NET</span><span>{fmt.currency(s.montant_net)}</span>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Lignes */}
-      <div className="card overflow-hidden">
+      <Card padded={false}>
         <div className="px-5 py-4 border-b">
           <h3 className="font-semibold text-gray-800">Lignes du décompte ({s.lignes?.length || 0})</h3>
         </div>
@@ -172,7 +174,7 @@ export default function SituationDetailPage() {
             </tfoot>
           </table>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

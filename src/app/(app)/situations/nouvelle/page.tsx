@@ -5,9 +5,14 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { situationsService, marchesService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import { Card, Button } from '@/components/ui';
 import NumberInput from '@/components/NumberInput';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 export default function NouvelleSituationPage() {
   const router = useRouter();
@@ -22,18 +27,18 @@ export default function NouvelleSituationPage() {
 
   const { data: marchesData } = useQuery({
     queryKey: ['marches-list'],
-    queryFn:  () => marchesService.list({ limit: 100, statut: 'en_cours' }).then(r => r.data.data),
+    queryFn:  () => apiFetch('/marches?limit=100&statut=en_cours').then(r => r.data),
   });
 
   const { data: initData, isFetching: loadingInit } = useQuery({
     queryKey: ['situation-init', marcheId],
-    queryFn:  () => situationsService.init(marcheId).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/situations/init/${marcheId}`).then(r => r.data),
     enabled:  !!marcheId,
   });
 
   const { data: situationsPrecedentes } = useQuery({
     queryKey: ['situations-marche', marcheId],
-    queryFn:  () => situationsService.list({ marche_id: marcheId, limit: 100 }).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/situations?marche_id=${marcheId}&limit=100`).then(r => r.data),
     enabled:  !!marcheId,
   });
 
@@ -83,22 +88,26 @@ export default function NouvelleSituationPage() {
     if (!periodeDebut || !periodeFin) { toast.error('Renseignez la période'); return; }
     setSaving(true);
     try {
-      await situationsService.create({
-        marche_id:           marcheId,
-        type_situation:      type,
-        periode_debut:       periodeDebut,
-        periode_fin:         periodeFin,
-        observations,
-        lignes: lignes.filter(l => l.quantite_periode > 0).map(l => ({
-          article_id:            l.article_id,
-          quantite_cumulee_avant:l.quantite_cumulee_avant,
-          quantite_periode:      l.quantite_periode,
-        })),
+      const res = await apiFetch('/situations', {
+        method: 'POST',
+        body: JSON.stringify({
+          marche_id:           marcheId,
+          type_situation:      type,
+          periode_debut:       periodeDebut,
+          periode_fin:         periodeFin,
+          observations,
+          lignes: lignes.filter(l => l.quantite_periode > 0).map(l => ({
+            article_id:            l.article_id,
+            quantite_cumulee_avant:l.quantite_cumulee_avant,
+            quantite_periode:      l.quantite_periode,
+          })),
+        }),
       });
+      if (!res.success) throw new Error(res.message || 'Erreur lors de la création');
       toast.success('Décompte créé avec succès');
       router.push('/situations');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Erreur lors de la création');
+      toast.error(err.message || 'Erreur lors de la création');
     } finally {
       setSaving(false);
     }
@@ -120,7 +129,7 @@ export default function NouvelleSituationPage() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Entête */}
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Informations du décompte</h3>
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="col-span-2">
@@ -163,11 +172,11 @@ export default function NouvelleSituationPage() {
                 onChange={e => setObservations(e.target.value)} />
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Tableau BQ / Situation */}
         {marcheId && (
-          <div className="card overflow-hidden">
+          <Card padded={false}>
             <div className="px-5 py-4 border-b flex items-center justify-between">
               <h3 className="font-semibold text-gray-800">Bordereau des quantités</h3>
               {marche && (
@@ -252,15 +261,16 @@ export default function NouvelleSituationPage() {
                 </table>
               </div>
             )}
-          </div>
+          </Card>
         )}
 
         <div className="flex gap-3">
-          <button type="submit" disabled={saving || !marcheId || lignes.every(l => l.quantite_periode === 0)}
-            className="btn-primary disabled:opacity-50">
+          <Button type="submit" disabled={saving || !marcheId || lignes.every(l => l.quantite_periode === 0)} loading={saving}>
             {saving ? 'Création...' : 'Créer le décompte'}
-          </button>
-          <Link href="/situations" className="btn-secondary">Annuler</Link>
+          </Button>
+          <Link href="/situations">
+            <Button type="button" variant="secondary">Annuler</Button>
+          </Link>
         </div>
       </form>
     </div>

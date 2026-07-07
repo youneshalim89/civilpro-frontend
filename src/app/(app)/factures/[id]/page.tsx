@@ -5,10 +5,15 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, FileDown, CheckCircle, XCircle, CreditCard, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { facturesService } from '@/lib/api';
 import { fmt, STATUTS_FACTURE } from '@/lib/utils';
 import { exportFacturePDF } from '@/lib/pdf';
+import { Card, Badge, Button, Modal, Loading } from '@/components/ui';
 import NumberInput from '@/components/NumberInput';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 export default function FactureDetailPage() {
   const { id }  = useParams<{ id: string }>();
@@ -19,24 +24,27 @@ export default function FactureDetailPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['facture', id],
-    queryFn:  () => facturesService.get(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/factures/${id}`).then(r => r.data),
     enabled:  !!id,
   });
 
   const validerMut = useMutation({
-    mutationFn: () => facturesService.valider(id),
+    mutationFn: () => apiFetch(`/factures/${id}/valider`, { method: 'PATCH' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['facture', id] }); toast.success('Facture validée'); },
     onError:    () => toast.error('Erreur lors de la validation'),
   });
 
   const annulerMut = useMutation({
-    mutationFn: () => facturesService.annuler(id),
+    mutationFn: () => apiFetch(`/factures/${id}/annuler`, { method: 'PATCH' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['facture', id] }); toast.success('Facture annulée'); },
     onError:    () => toast.error('Erreur lors de l\'annulation'),
   });
 
   const paiementMut = useMutation({
-    mutationFn: (payload: any) => facturesService.paiement(id, payload),
+    mutationFn: (payload: any) => apiFetch(`/factures/${id}/paiement`, { method: 'PATCH', body: JSON.stringify(payload) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => {
       qc.invalidateQueries({ queryKey: ['facture', id] });
       toast.success('Paiement enregistré');
@@ -45,12 +53,7 @@ export default function FactureDetailPage() {
     onError: () => toast.error('Erreur lors du paiement'),
   });
 
-  if (isLoading) return (
-    <div className="animate-pulse space-y-4">
-      <div className="h-8 bg-gray-200 rounded w-1/3" />
-      <div className="card h-64 bg-gray-100" />
-    </div>
-  );
+  if (isLoading) return <Loading />;
   if (!data) return <p className="text-gray-500">Facture introuvable.</p>;
 
   const f       = data;
@@ -69,7 +72,7 @@ export default function FactureDetailPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">{f.numero_facture}</h1>
               {statut && (
-                <span className={`badge text-sm px-3 py-1 ${statut.color}`}>{statut.label}</span>
+                <Badge className={`text-sm px-3 py-1 ${statut.color}`}>{statut.label}</Badge>
               )}
             </div>
             <p className="text-sm text-gray-500 mt-1">
@@ -78,21 +81,20 @@ export default function FactureDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => exportFacturePDF(f)}
-            className="btn-secondary text-sm flex items-center gap-2">
-            <FileDown className="w-4 h-4" /> PDF
-          </button>
+          <Button variant="secondary" size="sm" icon={<FileDown className="w-4 h-4" />} onClick={() => exportFacturePDF(f)}>
+            PDF
+          </Button>
           {f.statut === 'brouillon' && (
-            <button onClick={() => { if (confirm('Valider cette facture ?')) validerMut.mutate(); }}
-              className="btn-primary text-sm flex items-center gap-2">
-              <CheckCircle className="w-4 h-4" /> Valider
-            </button>
+            <Button size="sm" icon={<CheckCircle className="w-4 h-4" />}
+              onClick={() => { if (confirm('Valider cette facture ?')) validerMut.mutate(); }}>
+              Valider
+            </Button>
           )}
           {f.statut === 'validee' && (
-            <button onClick={() => { setPaiementModal(true); setMontantPaye(solde); }}
-              className="btn-primary text-sm flex items-center gap-2 bg-green-600 hover:bg-green-700">
-              <CreditCard className="w-4 h-4" /> Paiement
-            </button>
+            <Button size="sm" className="bg-green-600 hover:bg-green-700" icon={<CreditCard className="w-4 h-4" />}
+              onClick={() => { setPaiementModal(true); setMontantPaye(solde); }}>
+              Paiement
+            </Button>
           )}
           {['brouillon','validee'].includes(f.statut) && (
             <button onClick={() => { if (confirm('Annuler définitivement cette facture ?')) annulerMut.mutate(); }}
@@ -105,29 +107,29 @@ export default function FactureDetailPage() {
 
       {/* Indicateurs financiers */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="card p-4 border-l-4 border-blue-400">
+        <Card className="p-4 border-l-4 border-blue-400">
           <p className="text-xs text-gray-500">Montant HT</p>
           <p className="text-xl font-bold text-gray-900 mt-1">{fmt.currency(f.montant_ht)}</p>
-        </div>
-        <div className="card p-4 border-l-4 border-gray-300">
+        </Card>
+        <Card className="p-4 border-l-4 border-gray-300">
           <p className="text-xs text-gray-500">TVA ({f.taux_tva}%)</p>
           <p className="text-xl font-bold text-gray-700 mt-1">{fmt.currency(f.montant_tva)}</p>
-        </div>
-        <div className="card p-4 border-l-4 border-brand-400">
+        </Card>
+        <Card className="p-4 border-l-4 border-brand-400">
           <p className="text-xs text-gray-500">Montant TTC</p>
           <p className="text-xl font-bold text-brand-700 mt-1">{fmt.currency(f.montant_ttc)}</p>
-        </div>
-        <div className={`card p-4 border-l-4 ${solde <= 0 ? 'border-green-400' : 'border-red-400'}`}>
+        </Card>
+        <Card className={`p-4 border-l-4 ${solde <= 0 ? 'border-green-400' : 'border-red-400'}`}>
           <p className="text-xs text-gray-500">Solde restant</p>
           <p className={`text-xl font-bold mt-1 ${solde <= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {fmt.currency(Math.max(0, solde))}
           </p>
-        </div>
+        </Card>
       </div>
 
       {/* Lignes */}
       {(f.lignes?.length ?? 0) > 0 && (
-        <div className="card overflow-hidden">
+        <Card padded={false}>
           <div className="px-5 py-4 border-b">
             <h3 className="font-semibold text-gray-800">Lignes de facturation</h3>
           </div>
@@ -161,12 +163,12 @@ export default function FactureDetailPage() {
               </tfoot>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Infos complémentaires */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-brand-500" /> Suivi paiement
           </h3>
@@ -197,9 +199,9 @@ export default function FactureDetailPage() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Validation</h3>
           <div className="space-y-3">
             {[
@@ -213,43 +215,37 @@ export default function FactureDetailPage() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Modal paiement */}
-      {paiementModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-1">Enregistrer un paiement</h3>
-            <p className="text-sm text-gray-500 mb-5">Facture {f.numero_facture} — Solde: {fmt.currency(solde)}</p>
-            <div className="space-y-4">
-              <div>
-                <label className="label">Montant payé (MAD) *</label>
-                <NumberInput min={0.01} max={solde + 0.01} className="input"
-                  value={montantPaye} onChange={setMontantPaye} autoFocus />
-              </div>
-              <div>
-                <label className="label">Référence de paiement</label>
-                <input className="input" value={reference} onChange={e => setReference(e.target.value)}
-                  placeholder="N° virement, chèque..." />
-              </div>
-              {montantPaye >= solde && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
-                  Ce paiement soldra entièrement la facture.
-                </div>
-              )}
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button disabled={paiementMut.isPending || montantPaye <= 0}
-                onClick={() => paiementMut.mutate({ montant_paye: montantPaye, reference_paiement: reference })}
-                className="btn-primary flex-1">
-                {paiementMut.isPending ? 'Enregistrement...' : 'Valider le paiement'}
-              </button>
-              <button onClick={() => setPaiementModal(false)} className="btn-secondary flex-1">Annuler</button>
-            </div>
+      <Modal open={paiementModal} onClose={() => setPaiementModal(false)} title="Enregistrer un paiement">
+        <p className="text-sm text-gray-500 mb-5">Facture {f.numero_facture} — Solde: {fmt.currency(solde)}</p>
+        <div className="space-y-4">
+          <div>
+            <label className="label">Montant payé (MAD) *</label>
+            <NumberInput min={0.01} max={solde + 0.01} className="input"
+              value={montantPaye} onChange={setMontantPaye} autoFocus />
           </div>
+          <div>
+            <label className="label">Référence de paiement</label>
+            <input className="input" value={reference} onChange={e => setReference(e.target.value)}
+              placeholder="N° virement, chèque..." />
+          </div>
+          {montantPaye >= solde && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
+              Ce paiement soldra entièrement la facture.
+            </div>
+          )}
         </div>
-      )}
+        <div className="flex gap-3 mt-6">
+          <Button disabled={paiementMut.isPending || montantPaye <= 0} loading={paiementMut.isPending} className="flex-1"
+            onClick={() => paiementMut.mutate({ montant_paye: montantPaye, reference_paiement: reference })}>
+            {paiementMut.isPending ? 'Enregistrement...' : 'Valider le paiement'}
+          </Button>
+          <Button variant="secondary" className="flex-1" onClick={() => setPaiementModal(false)}>Annuler</Button>
+        </div>
+      </Modal>
     </div>
   );
 }

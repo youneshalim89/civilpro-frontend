@@ -3,26 +3,26 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, FileDown, TrendingUp } from 'lucide-react';
-import { situationsService } from '@/lib/api';
 import { fmt, STATUTS_SITUATION } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { exportSituationRecapPDF } from '@/lib/pdf';
+import { Card, Badge, Button, Loading } from '@/components/ui';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 export default function SituationRecapPage() {
   const { marcheId } = useParams<{ marcheId: string }>();
 
   const { data, isLoading } = useQuery({
     queryKey: ['situation-recap', marcheId],
-    queryFn:  () => situationsService.recap(marcheId).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/situations/recap/${marcheId}`).then(r => r.data),
     enabled:  !!marcheId,
   });
 
-  if (isLoading) return (
-    <div className="animate-pulse space-y-4">
-      <div className="h-8 bg-gray-200 rounded w-1/3" />
-      <div className="card h-64 bg-gray-100" />
-    </div>
-  );
+  if (isLoading) return <Loading />;
   if (!data) return <p className="text-gray-500">Récapitulatif introuvable.</p>;
 
   const { marche, situations, par_article, recapitulatif: r } = data;
@@ -47,10 +47,9 @@ export default function SituationRecapPage() {
             <p className="text-sm text-gray-500">{marche.numero_marche} — {marche.objet}</p>
           </div>
         </div>
-        <button onClick={() => exportSituationRecapPDF(data)}
-          className="btn-secondary text-sm flex items-center gap-2">
-          <FileDown className="w-4 h-4" /> Exporter PDF
-        </button>
+        <Button variant="secondary" size="sm" icon={<FileDown className="w-4 h-4" />} onClick={() => exportSituationRecapPDF(data)}>
+          Exporter PDF
+        </Button>
       </div>
 
       {/* Synthèse financière */}
@@ -65,17 +64,17 @@ export default function SituationRecapPage() {
           { label: 'Avancement phys.',  value: fmt.pct(r.avancement_physique),    color: 'text-blue-600' },
           { label: 'Avancement fin.',   value: fmt.pct(r.avancement_financier),   color: 'text-brand-600' },
         ].map(k => (
-          <div key={k.label} className="card p-4">
+          <Card key={k.label} className="p-4">
             <p className="text-xs text-gray-500">{k.label}</p>
             <p className={`text-lg font-bold mt-1 ${k.color}`}>{k.value}</p>
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Graphique évolution */}
       {chartData.length > 0 && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <div className="card p-5">
+          <Card>
             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-brand-500" /> Progression financière
             </h3>
@@ -88,8 +87,8 @@ export default function SituationRecapPage() {
                 <Line type="monotone" dataKey="avancement" stroke="#f08c0a" strokeWidth={2} dot={{ r: 4 }} name="Avancement %" />
               </LineChart>
             </ResponsiveContainer>
-          </div>
-          <div className="card p-5">
+          </Card>
+          <Card>
             <h3 className="font-semibold text-gray-800 mb-4">Montants par situation (MAD)</h3>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={chartData}>
@@ -102,12 +101,12 @@ export default function SituationRecapPage() {
                 <Bar dataKey="montant_net"  fill="#10b981" name="Net"  radius={[3,3,0,0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Tableau récap décomptes */}
-      <div className="card overflow-hidden">
+      <Card padded={false}>
         <div className="px-5 py-4 border-b">
           <h3 className="font-semibold text-gray-800">Historique des décomptes</h3>
         </div>
@@ -136,9 +135,9 @@ export default function SituationRecapPage() {
                   <td className="table-cell text-right text-red-500">{fmt.currency(s.retenue_garantie)}</td>
                   <td className="table-cell text-right font-semibold text-green-700">{fmt.currency(s.montant_net)}</td>
                   <td className="table-cell">
-                    <span className={`badge ${STATUTS_SITUATION[s.statut]?.color}`}>
+                    <Badge className={STATUTS_SITUATION[s.statut]?.color}>
                       {STATUTS_SITUATION[s.statut]?.label}
-                    </span>
+                    </Badge>
                   </td>
                 </tr>
               ))}
@@ -154,10 +153,10 @@ export default function SituationRecapPage() {
             </tfoot>
           </table>
         </div>
-      </div>
+      </Card>
 
       {/* Tableau par article */}
-      <div className="card overflow-hidden">
+      <Card padded={false}>
         <div className="px-5 py-4 border-b">
           <h3 className="font-semibold text-gray-800">Avancement financier par article (basé sur les décomptes)</h3>
         </div>
@@ -201,7 +200,7 @@ export default function SituationRecapPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

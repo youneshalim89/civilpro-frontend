@@ -4,9 +4,14 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Truck, Receipt, CheckCircle, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { commandesService, facturesService } from '@/lib/api';
 import { fmt, STATUTS_COMMANDE } from '@/lib/utils';
 import { exportCommandePDF } from '@/lib/pdf';
+import { Card, Badge, Button, Loading } from '@/components/ui';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 const NEXT_STATUTS: Record<string, string[]> = {
   en_attente:         ['confirmee', 'annulee'],
@@ -26,23 +31,25 @@ export default function CommandeDetailPage() {
 
   const { data: commande, isLoading } = useQuery({
     queryKey: ['commande', id],
-    queryFn:  () => commandesService.get(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/commandes/${id}`).then(r => r.data),
     enabled:  !!id,
   });
 
   const statutMut = useMutation({
-    mutationFn: (next: string) => commandesService.updateStatut(id, { statut: next }),
+    mutationFn: (next: string) => apiFetch(`/commandes/${id}/statut`, { method: 'PATCH', body: JSON.stringify({ statut: next }) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['commande', id] }); toast.success('Statut mis à jour'); },
     onError:    () => toast.error('Erreur'),
   });
 
   const genFactureMut = useMutation({
-    mutationFn: () => facturesService.fromCommande(id),
+    mutationFn: () => apiFetch(`/factures/from-commande/${id}`, { method: 'POST' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { toast.success('Facture générée'); router.push('/factures'); },
     onError:    () => toast.error('Erreur lors de la génération de la facture'),
   });
 
-  if (isLoading) return <div className="animate-pulse space-y-4"><div className="h-8 bg-gray-200 rounded w-1/3" /><div className="card h-64 bg-gray-100" /></div>;
+  if (isLoading) return <Loading />;
   if (!commande) return <p className="text-gray-500">Commande introuvable.</p>;
 
   const s = STATUTS_COMMANDE[commande.statut];
@@ -58,7 +65,7 @@ export default function CommandeDetailPage() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">{commande.numero_commande}</h1>
-              <span className={`badge ${s?.color}`}>{s?.label}</span>
+              <Badge className={s?.color}>{s?.label}</Badge>
             </div>
             <p className="text-sm text-gray-500 mt-1">
               Marché : {commande.numero_marche} — {commande.marche_objet}
@@ -66,29 +73,28 @@ export default function CommandeDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => exportCommandePDF(commande)} className="btn-secondary text-sm flex items-center gap-2">
-            <FileDown className="w-4 h-4" /> PDF
-          </button>
+          <Button variant="secondary" size="sm" icon={<FileDown className="w-4 h-4" />} onClick={() => exportCommandePDF(commande)}>
+            PDF
+          </Button>
           {nextSteps.map(next => (
-            <button key={next} onClick={() => statutMut.mutate(next)}
-              className={next === 'annulee' ? 'btn-secondary text-sm text-red-600' : 'btn-secondary text-sm'}>
-              {next === 'livree' && <CheckCircle className="w-4 h-4 inline mr-1 text-green-500" />}
-              {next === 'en_cours_livraison' && <Truck className="w-4 h-4 inline mr-1 text-blue-500" />}
+            <Button key={next} variant="secondary" size="sm" className={next === 'annulee' ? 'text-red-600' : ''}
+              icon={next === 'livree' ? <CheckCircle className="w-4 h-4 text-green-500" /> : next === 'en_cours_livraison' ? <Truck className="w-4 h-4 text-blue-500" /> : undefined}
+              onClick={() => statutMut.mutate(next)}>
               {STATUT_LABELS[next]}
-            </button>
+            </Button>
           ))}
           {commande.statut === 'livree' && (
-            <button onClick={() => genFactureMut.mutate()} disabled={genFactureMut.isPending}
-              className="btn-primary text-sm flex items-center gap-2">
-              <Receipt className="w-4 h-4" /> Générer facture
-            </button>
+            <Button size="sm" icon={<Receipt className="w-4 h-4" />} disabled={genFactureMut.isPending}
+              onClick={() => genFactureMut.mutate()}>
+              Générer facture
+            </Button>
           )}
         </div>
       </div>
 
       {/* Infos */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="card p-5 col-span-2">
+        <Card className="col-span-2">
           <h3 className="font-semibold text-gray-800 mb-4">Détails de la commande</h3>
           <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
             {[
@@ -105,10 +111,10 @@ export default function CommandeDetailPage() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
 
         {/* Totaux */}
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Récapitulatif financier</h3>
           <div className="space-y-3 text-sm">
             {[
@@ -122,11 +128,11 @@ export default function CommandeDetailPage() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Lignes */}
-      <div className="card overflow-hidden">
+      <Card padded={false}>
         <div className="px-5 py-4 border-b">
           <h3 className="font-semibold text-gray-800">Lignes de commande ({commande.lignes?.length || 0})</h3>
         </div>
@@ -162,7 +168,7 @@ export default function CommandeDetailPage() {
             </tfoot>
           </table>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

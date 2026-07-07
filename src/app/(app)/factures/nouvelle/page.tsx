@@ -4,8 +4,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { facturesService, marchesService, articlesService } from '@/lib/api';
+import { Card, Button } from '@/components/ui';
 import NumberInput from '@/components/NumberInput';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 type Ligne = { designation: string; unite: string; quantite_executee: number; prix_unitaire: number; article_id?: string; };
 const emptyLigne = (): Ligne => ({ designation: '', unite: '', quantite_executee: 0, prix_unitaire: 0 });
@@ -25,12 +30,12 @@ export default function NouvelleFacturePage() {
   const [saving,  setSaving]  = useState(false);
 
   useEffect(() => {
-    marchesService.list({ limit: 100 }).then(r => setMarches(r.data.data || []));
+    apiFetch('/marches?limit=100').then(r => setMarches(r.data || []));
   }, []);
 
   useEffect(() => {
     if (form.marche_id) {
-      articlesService.list(form.marche_id).then(r => setArticles(r.data.data || []));
+      apiFetch(`/marches/${form.marche_id}/articles`).then(r => setArticles(r.data || []));
     } else {
       setArticles([]);
     }
@@ -71,11 +76,12 @@ export default function NouvelleFacturePage() {
 
     setSaving(true);
     try {
-      const res = await facturesService.create({ ...form, lignes: validLignes });
+      const res = await apiFetch('/factures', { method: 'POST', body: JSON.stringify({ ...form, lignes: validLignes }) });
+      if (!res.success) throw new Error(res.message || 'Erreur lors de la création');
       toast.success('Facture créée avec succès');
-      router.push(`/factures/${res.data.data.id}`);
+      router.push(`/factures/${res.data.id}`);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Erreur lors de la création');
+      toast.error(err.message || 'Erreur lors de la création');
     } finally {
       setSaving(false);
     }
@@ -95,7 +101,7 @@ export default function NouvelleFacturePage() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* En-tête */}
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Informations générales</h3>
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div className="xl:col-span-1">
@@ -126,16 +132,15 @@ export default function NouvelleFacturePage() {
                 placeholder="Observations éventuelles..." />
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Lignes */}
-        <div className="card overflow-hidden">
+        <Card padded={false}>
           <div className="px-5 py-4 border-b flex items-center justify-between">
             <h3 className="font-semibold text-gray-800">Lignes de facturation</h3>
-            <button type="button" onClick={addLigne}
-              className="btn-secondary text-sm flex items-center gap-2">
-              <Plus className="w-4 h-4" /> Ajouter une ligne
-            </button>
+            <Button type="button" variant="secondary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={addLigne}>
+              Ajouter une ligne
+            </Button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -223,13 +228,15 @@ export default function NouvelleFacturePage() {
               </tfoot>
             </table>
           </div>
-        </div>
+        </Card>
 
         <div className="flex gap-3">
-          <button type="submit" disabled={saving} className="btn-primary">
+          <Button type="submit" disabled={saving} loading={saving}>
             {saving ? 'Création...' : 'Créer la facture'}
-          </button>
-          <Link href="/factures" className="btn-secondary">Annuler</Link>
+          </Button>
+          <Link href="/factures">
+            <Button type="button" variant="secondary">Annuler</Button>
+          </Link>
         </div>
       </form>
     </div>

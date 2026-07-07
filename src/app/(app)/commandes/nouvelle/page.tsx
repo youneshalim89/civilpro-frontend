@@ -5,9 +5,14 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { commandesService, marchesService, articlesService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import { Card, Button } from '@/components/ui';
 import NumberInput from '@/components/NumberInput';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 interface Ligne {
   article_id:    string;
@@ -36,20 +41,18 @@ export default function NouvelleCommandePage() {
 
   const { data: marchesData } = useQuery({
     queryKey: ['marches-list'],
-    queryFn:  () => marchesService.list({ limit: 100 }).then(r => r.data.data),
+    queryFn:  () => apiFetch('/marches?limit=100').then(r => r.data),
   });
 
   const { data: articlesData } = useQuery({
     queryKey: ['articles-for-commande', form.marche_id],
-    queryFn:  () => articlesService.list(form.marche_id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${form.marche_id}/articles`).then(r => r.data),
     enabled:  !!form.marche_id,
   });
 
   const { data: fournsData } = useQuery({
     queryKey: ['fournisseurs'],
-    queryFn:  () => fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stock/fournisseurs`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('gl_token')}` },
-    }).then(r => r.json()).then(r => r.data || []),
+    queryFn:  () => apiFetch('/stock/fournisseurs').then(r => r.data || []),
   });
 
   const totalHT  = lignes.reduce((s, l) => s + (l.quantite * l.prix_unitaire), 0);
@@ -86,11 +89,12 @@ export default function NouvelleCommandePage() {
     if (lignes.some(l => !l.designation)) { toast.error('Remplissez toutes les désignations'); return; }
     setSaving(true);
     try {
-      await commandesService.create({ ...form, lignes });
+      const res = await apiFetch('/commandes', { method: 'POST', body: JSON.stringify({ ...form, lignes }) });
+      if (!res.success) throw new Error(res.message || 'Erreur lors de la création');
       toast.success('Commande créée avec succès');
       router.push('/commandes');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Erreur lors de la création');
+      toast.error(err.message || 'Erreur lors de la création');
     } finally {
       setSaving(false);
     }
@@ -110,7 +114,7 @@ export default function NouvelleCommandePage() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Informations générales */}
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Informations générales</h3>
           <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
             <div className="col-span-2 xl:col-span-1">
@@ -154,15 +158,15 @@ export default function NouvelleCommandePage() {
                 onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Lignes de commande */}
-        <div className="card overflow-hidden">
+        <Card padded={false}>
           <div className="px-5 py-4 border-b flex items-center justify-between">
             <h3 className="font-semibold text-gray-800">Lignes de commande</h3>
-            <button type="button" onClick={addLigne} className="btn-secondary text-xs flex items-center gap-1">
-              <Plus className="w-3.5 h-3.5" /> Ajouter ligne
-            </button>
+            <Button type="button" variant="secondary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={addLigne}>
+              Ajouter ligne
+            </Button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -239,14 +243,16 @@ export default function NouvelleCommandePage() {
               </tfoot>
             </table>
           </div>
-        </div>
+        </Card>
 
         {/* Actions */}
         <div className="flex gap-3">
-          <button type="submit" disabled={saving} className="btn-primary">
+          <Button type="submit" disabled={saving} loading={saving}>
             {saving ? 'Création...' : 'Créer la commande'}
-          </button>
-          <Link href="/commandes" className="btn-secondary">Annuler</Link>
+          </Button>
+          <Link href="/commandes">
+            <Button type="button" variant="secondary">Annuler</Button>
+          </Link>
         </div>
       </form>
     </div>
