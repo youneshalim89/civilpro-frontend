@@ -240,7 +240,7 @@ export default function FactureDetailPage() {
         </div>
         <div className="flex gap-3 mt-6">
           <Button disabled={paiementMut.isPending || montantPaye <= 0} loading={paiementMut.isPending} className="flex-1"
-            onClick={() => paiementMut.mutate({ montant_paye: montantPaye, reference_paiement: reference })}>
+            onClick={() => paiementMut.mutate({ montant_paye: montantPaye, reference_paiement: reference, date_paiement: new Date().toISOString().slice(0, 10) })}>
             {paiementMut.isPending ? 'Enregistrement...' : 'Valider le paiement'}
           </Button>
           <Button variant="secondary" className="flex-1" onClick={() => setPaiementModal(false)}>Annuler</Button>
