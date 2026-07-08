@@ -3,12 +3,19 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, Trash2, Plus, Truck, Package, Wrench } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Pencil, Plus, Truck, Package, Wrench, Fuel, Users, CalendarDays, CalendarRange, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { marchesService, chargesService, chargesJournalieresService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import { EnginsDatalist } from '@/components/marches/EnginsDatalist';
+import { Card, CardHeader, Table, Button } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
 import NumberInput from '@/components/NumberInput';
 import type { ChargeMensuelle, ChargeJournaliere } from '@/lib/api';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 const CHAMPS: { key: keyof ChargeMensuelle; label: string }[] = [
   { key: 'masse_salariale', label: 'Masse salariale' },
@@ -30,32 +37,36 @@ const UNITE_PAR_MATERIAU: Record<string, string> = {
   'Sable': 'm³', 'Tout-venant': 'm³', 'Gravette': 'm³', 'Grave concassée': 'm³',
 };
 
-const ENGINS_PREDEFINIS = [
-  'MAN 8x4',
-  'Pelle hydraulique sur pneu 318',
-  'JCB',
-  'Camion malaxeur 8x4',
-  'Camion benne 7m³',
-  'Niveleuse',
-  'Compacteur 12T',
-  'Pick up A80',
-  'Dokker A48',
-  'Camion-citerne',
-  'Chargeuse',
-  'Poclain 318',
-];
-
-const CATEGORIES_JOUR: Record<string, string> = {
-  location_materiel: 'Location matériel',
-  achat_materiaux:   'Achat matériaux',
-  autre:             'Autre',
+const CATEGORIES_JOUR: Record<string, { label: string; icon: any }> = {
+  gasoil:             { label: 'Gasoil',           icon: Fuel },
+  main_oeuvre:        { label: "Main d'œuvre",     icon: Users },
+  achat_materiaux:    { label: 'Fournitures',      icon: Package },
+  reparations:        { label: 'Réparations',      icon: Wrench },
+  location_materiel:  { label: 'Location matériel',icon: Truck },
+  autre:              { label: 'Divers',           icon: Calendar },
 };
 
-const moisActuel = () => new Date().toISOString().slice(0, 7);
+// Composants de date locaux (pas toISOString) — évite le décalage d'un jour
+// selon le fuseau horaire, même correctif que Fix-Pointage-TZ.
+const toLocalDateStr = (d: Date) => {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+const todayLocal = () => toLocalDateStr(new Date());
+const moisActuel = () => todayLocal().slice(0, 7);
+
+// Lundi → dimanche de la semaine en cours (composants locaux)
+const semaineEnCours = () => {
+  const now = new Date();
+  const jour = (now.getDay() + 6) % 7; // 0 = lundi
+  const lundi = new Date(now); lundi.setDate(now.getDate() - jour);
+  const dimanche = new Date(lundi); dimanche.setDate(lundi.getDate() + 6);
+  return { debut: toLocalDateStr(lundi), fin: toLocalDateStr(dimanche) };
+};
 
 const emptyChargeJour = {
-  date_jour: new Date().toISOString().split('T')[0],
-  categorie: 'location_materiel' as ChargeJournaliere['categorie'],
+  date_jour: todayLocal(),
+  categorie: 'gasoil' as ChargeJournaliere['categorie'],
   designation: '',
   quantite: 1,
   unite: 'jour',
@@ -73,12 +84,12 @@ export default function ChargesPage() {
 
   const { data: marche } = useQuery({
     queryKey: ['marche', id],
-    queryFn:  () => marchesService.get(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${id}`).then(r => r.data),
   });
 
   const { data, isLoading } = useQuery({
     queryKey: ['charges', id],
-    queryFn:  () => chargesService.list(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${id}/charges`).then(r => r.data),
   });
 
   const charges: ChargeMensuelle[] = data || [];
@@ -95,49 +106,163 @@ export default function ChargesPage() {
   }, [mois, current]);
 
   const saveMut = useMutation({
-    mutationFn: () => chargesService.save(id, { mois, ...form, objectif_mensuel: objectif }),
+    mutationFn: () => apiFetch(`/marches/${id}/charges`, { method: 'POST', body: JSON.stringify({ mois, ...form, objectif_mensuel: objectif }) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['charges', id] }); toast.success('Charges enregistrées'); },
     onError:    () => toast.error('Erreur lors de l\'enregistrement'),
   });
 
   const deleteMut = useMutation({
-    mutationFn: (chargeId: string) => chargesService.delete(id, chargeId),
+    mutationFn: (chargeId: string) => apiFetch(`/marches/${id}/charges/${chargeId}`, { method: 'DELETE' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['charges', id] }); toast.success('Supprimé'); },
   });
 
-  // ── Charges journalières (location matériel / achat matériaux) ──
+  // ── Charges journalières (saisie rapide des dépenses de chantier) ──
   const [showJourForm, setShowJourForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [jourForm, setJourForm] = useState(emptyChargeJour);
 
   const { data: chargesJourData, isLoading: loadingJour } = useQuery({
     queryKey: ['charges-jour', id, mois],
-    queryFn:  () => chargesJournalieresService.list(id, mois).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${id}/charges-journalieres?mois=${mois}`).then(r => r.data),
   });
   const chargesJour: ChargeJournaliere[] = chargesJourData || [];
 
+  const resetJourForm = () => {
+    setJourForm(emptyChargeJour);
+    setEditingId(null);
+    setShowJourForm(false);
+  };
+
   const createJourMut = useMutation({
-    mutationFn: () => chargesJournalieresService.create(id, jourForm),
+    mutationFn: () => apiFetch(`/marches/${id}/charges-journalieres`, { method: 'POST', body: JSON.stringify(jourForm) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => {
       qc.invalidateQueries({ queryKey: ['charges-jour', id, mois] });
       toast.success('Charge ajoutée');
-      setJourForm({ ...emptyChargeJour, categorie: jourForm.categorie });
-      setShowJourForm(false);
+      resetJourForm();
     },
     onError: () => toast.error('Erreur lors de l\'enregistrement'),
   });
 
+  const updateJourMut = useMutation({
+    mutationFn: () => apiFetch(`/marches/${id}/charges-journalieres/${editingId}`, { method: 'PATCH', body: JSON.stringify(jourForm) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ['charges-jour', id, mois] });
+      toast.success('Charge modifiée');
+      resetJourForm();
+    },
+    onError: () => toast.error('Erreur lors de la modification'),
+  });
+
   const deleteJourMut = useMutation({
-    mutationFn: (chargeId: string) => chargesJournalieresService.delete(id, chargeId),
+    mutationFn: (chargeId: string) => apiFetch(`/marches/${id}/charges-journalieres/${chargeId}`, { method: 'DELETE' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['charges-jour', id, mois] }); toast.success('Supprimé'); },
   });
 
+  const startEdit = (c: ChargeJournaliere) => {
+    setEditingId(c.id);
+    setJourForm({
+      date_jour: toLocalDateStr(new Date(c.date_jour)),
+      categorie: c.categorie,
+      designation: c.designation,
+      quantite: Number(c.quantite),
+      unite: c.unite,
+      prix_unitaire: Number(c.prix_unitaire),
+    });
+    setShowJourForm(true);
+  };
+
   const totalJour = chargesJour.reduce((s, c) => s + (Number(c.montant) || 0), 0);
-  const totalLocation = chargesJour.filter(c => c.categorie === 'location_materiel').reduce((s, c) => s + Number(c.montant), 0);
-  const totalAchatMateriaux = chargesJour.filter(c => c.categorie === 'achat_materiaux').reduce((s, c) => s + Number(c.montant), 0);
+
+  // Totaux par catégorie (mois affiché)
+  const totauxParCategorie = Object.keys(CATEGORIES_JOUR).map(cat => ({
+    cat,
+    total: chargesJour.filter(c => c.categorie === cat).reduce((s, c) => s + Number(c.montant), 0),
+  })).filter(t => t.total > 0);
+
+  // Total du jour (aujourd'hui, date locale) — uniquement fiable si le mois affiché est le mois en cours
+  const totalAujourdhui = chargesJour
+    .filter(c => toLocalDateStr(new Date(c.date_jour)) === todayLocal())
+    .reduce((s, c) => s + Number(c.montant), 0);
+
+  // Total de la semaine en cours — limité aux données du mois affiché (documenté : si la semaine
+  // chevauche deux mois, seule la partie du mois actuellement chargé est comptée).
+  const { debut: semaineDebut, fin: semaineFin } = semaineEnCours();
+  const totalSemaine = chargesJour
+    .filter(c => { const d = toLocalDateStr(new Date(c.date_jour)); return d >= semaineDebut && d <= semaineFin; })
+    .reduce((s, c) => s + Number(c.montant), 0);
+  const semaineChevaucheMois = semaineDebut.slice(0, 7) !== semaineFin.slice(0, 7);
 
   const totalMensuelForm = CHAMPS.reduce((s, c) => s + (form[c.key] || 0), 0);
   const total = totalMensuelForm + totalJour;
   const marge = objectif - total;
+
+  const chargeJourColumns: TableColumn<ChargeJournaliere>[] = [
+    { key: 'date_jour', header: 'Date', render: (c) => fmt.date(c.date_jour) },
+    {
+      key: 'categorie', header: 'Catégorie',
+      render: (c) => {
+        const Icon = CATEGORIES_JOUR[c.categorie]?.icon;
+        return (
+          <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+            {Icon && <Icon className="w-3.5 h-3.5" />}
+            {CATEGORIES_JOUR[c.categorie]?.label || c.categorie}
+          </span>
+        );
+      },
+    },
+    { key: 'designation', header: 'Désignation', render: (c) => <span className="font-medium">{c.designation}</span> },
+    { key: 'quantite', header: 'Qté', align: 'right', render: (c) => `${fmt.number(c.quantite)} ${c.unite}` },
+    { key: 'prix_unitaire', header: 'Prix unit.', align: 'right', render: (c) => fmt.currency(c.prix_unitaire) },
+    { key: 'montant', header: 'Montant', align: 'right', render: (c) => <span className="font-semibold">{fmt.currency(c.montant)}</span> },
+    {
+      key: 'actions', header: 'Actions',
+      render: (c) => (
+        <div className="flex items-center gap-1">
+          <button onClick={() => startEdit(c)}
+            className="p-1.5 hover:bg-gray-100 rounded-lg"><Pencil className="w-4 h-4 text-gray-400" /></button>
+          <button onClick={() => { if (confirm('Supprimer cette charge ?')) deleteJourMut.mutate(c.id); }}
+            className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
+        </div>
+      ),
+    },
+  ];
+
+  const chargeJourFooter = chargesJour.length > 0 && (
+    <tr className="border-t bg-brand-50">
+      <td colSpan={5} className="px-4 py-3 text-right font-bold text-brand-700 text-sm">TOTAL JOURNALIER</td>
+      <td className="px-4 py-3 text-right font-bold text-brand-700">{fmt.currency(totalJour)}</td>
+      <td></td>
+    </tr>
+  );
+
+  const historiqueColumns: TableColumn<ChargeMensuelle>[] = [
+    { key: 'mois', header: 'Mois', render: (c) => <span className="font-medium">{c.mois}</span> },
+    {
+      key: 'total', header: 'Total charges', align: 'right',
+      render: (c) => fmt.currency(CHAMPS.reduce((s, ch) => s + (Number(c[ch.key]) || 0), 0)),
+    },
+    { key: 'objectif_mensuel', header: 'Objectif', align: 'right', render: (c) => <span className="text-gray-500">{fmt.currency(c.objectif_mensuel)}</span> },
+    {
+      key: 'marge', header: 'Marge', align: 'right',
+      render: (c) => {
+        const t = CHAMPS.reduce((s, ch) => s + (Number(c[ch.key]) || 0), 0);
+        const m = (Number(c.objectif_mensuel) || 0) - t;
+        return <span className={`font-semibold ${m >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt.currency(m)}</span>;
+      },
+    },
+    {
+      key: 'actions', header: 'Actions',
+      render: (c) => (
+        <button onClick={(e) => { e.stopPropagation(); if (confirm('Supprimer ce mois ?')) deleteMut.mutate(c.id); }}
+          className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-5">
@@ -157,17 +282,17 @@ export default function ChargesPage() {
       </div>
 
       {/* Sélecteur de mois */}
-      <div className="card p-4 flex items-center gap-4">
+      <Card className="p-4 flex items-center gap-4">
         <label className="label mb-0 whitespace-nowrap">Mois</label>
         <input type="month" className="input text-sm w-48" value={mois} onChange={e => setMois(e.target.value)} />
         {current && (
           <span className="text-xs text-gray-400">Dernière mise à jour enregistrée pour ce mois</span>
         )}
-      </div>
+      </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         {/* Formulaire */}
-        <div className="card p-5 xl:col-span-2">
+        <Card className="xl:col-span-2">
           <h3 className="font-semibold text-gray-800 mb-4">Détail des charges — {mois}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -183,41 +308,69 @@ export default function ChargesPage() {
               </div>
             ))}
           </div>
-          <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
-            className="btn-primary text-sm flex items-center gap-2 mt-5">
-            <Save className="w-4 h-4" /> {saveMut.isPending ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
-        </div>
+          <Button onClick={() => saveMut.mutate()} loading={saveMut.isPending} icon={<Save className="w-4 h-4" />} className="mt-5">
+            {saveMut.isPending ? 'Enregistrement...' : 'Enregistrer'}
+          </Button>
+        </Card>
 
         {/* Récapitulatif */}
         <div className="space-y-4">
-          <div className="card p-5">
+          <Card>
             <h3 className="font-semibold text-gray-800 mb-4">Récapitulatif — {mois}</h3>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between"><span className="text-gray-500">Objectif mensuel</span><span className="font-semibold">{fmt.currency(objectif)}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Charges fixes (formulaire)</span><span>{fmt.currency(totalMensuelForm)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Location matériel (jour)</span><span>{fmt.currency(totalLocation)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Achat matériaux (jour)</span><span>{fmt.currency(totalAchatMateriaux)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Charges journalières (mois)</span><span>{fmt.currency(totalJour)}</span></div>
               <div className="flex justify-between border-t pt-3"><span className="text-gray-500 font-medium">Total charges</span><span className="font-bold text-red-600">{fmt.currency(total)}</span></div>
               <div className={`flex justify-between border-t pt-3 font-bold ${marge >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 <span>Marge brute</span><span>{fmt.currency(marge)}</span>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
-      {/* Charges journalières */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b flex items-center justify-between">
-          <h3 className="font-semibold text-gray-800">Charges journalières — {mois}</h3>
-          <button onClick={() => setShowJourForm(!showJourForm)} className="btn-primary text-sm flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Ajouter
-          </button>
+      {/* Charges journalières — saisie rapide des dépenses de chantier */}
+      <Card padded={false}>
+        <CardHeader
+          title={`Charges journalières — ${mois}`}
+          action={<Button onClick={() => { if (showJourForm) resetJourForm(); else setShowJourForm(true); }} icon={<Plus className="w-4 h-4" />}>{showJourForm ? 'Fermer' : 'Ajouter une charge'}</Button>}
+        />
+
+        {/* Totaux jour / semaine / mois */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-5 border-b">
+          <Card className="p-4 border-l-4 border-brand-400">
+            <p className="text-xs text-gray-500 flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5" /> Aujourd'hui</p>
+            <p className="text-lg font-bold text-gray-900 mt-1">{fmt.currency(totalAujourdhui)}</p>
+          </Card>
+          <Card className="p-4 border-l-4 border-blue-400">
+            <p className="text-xs text-gray-500 flex items-center gap-1.5"><CalendarRange className="w-3.5 h-3.5" /> Semaine en cours{semaineChevaucheMois ? ' (mois affiché)' : ''}</p>
+            <p className="text-lg font-bold text-gray-900 mt-1">{fmt.currency(totalSemaine)}</p>
+          </Card>
+          <Card className="p-4 border-l-4 border-red-400">
+            <p className="text-xs text-gray-500 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Mois — {mois}</p>
+            <p className="text-lg font-bold text-gray-900 mt-1">{fmt.currency(totalJour)}</p>
+          </Card>
         </div>
+
+        {/* Totaux par catégorie */}
+        {totauxParCategorie.length > 0 && (
+          <div className="flex flex-wrap gap-3 px-5 pb-5 border-b">
+            {totauxParCategorie.map(({ cat, total: t }) => {
+              const Icon = CATEGORIES_JOUR[cat]?.icon;
+              return (
+                <span key={cat} className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 rounded-full px-3 py-1.5">
+                  {Icon && <Icon className="w-3.5 h-3.5" />}
+                  {CATEGORIES_JOUR[cat]?.label} : <strong>{fmt.currency(t)}</strong>
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         {showJourForm && (
           <div className="p-5 border-b bg-gray-50">
+            {editingId && <p className="text-xs text-brand-600 font-medium mb-3">Modification d'une charge existante</p>}
             <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
               <div>
                 <label className="label">Date *</label>
@@ -229,9 +382,9 @@ export default function ChargesPage() {
                 <select className="input text-sm" value={jourForm.categorie}
                   onChange={e => setJourForm(f => ({
                     ...f, categorie: e.target.value as ChargeJournaliere['categorie'],
-                    designation: '', unite: e.target.value === 'achat_materiaux' ? 'm³' : 'jour',
+                    designation: '', unite: e.target.value === 'achat_materiaux' ? 'm³' : e.target.value === 'gasoil' ? 'L' : 'jour',
                   }))}>
-                  {Object.entries(CATEGORIES_JOUR).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  {Object.entries(CATEGORIES_JOUR).map(([v, c]) => <option key={v} value={v}>{c.label}</option>)}
                 </select>
               </div>
 
@@ -240,9 +393,7 @@ export default function ChargesPage() {
                   <label className="label">Engin *</label>
                   <input className="input text-sm" list="engins-list-charges" placeholder="Sélectionner ou saisir..." value={jourForm.designation}
                     onChange={e => setJourForm(f => ({ ...f, designation: e.target.value }))} />
-                  <datalist id="engins-list-charges">
-                    {ENGINS_PREDEFINIS.map(e => <option key={e} value={e} />)}
-                  </datalist>
+                  <EnginsDatalist id="engins-list-charges" />
                 </div>
               )}
               {jourForm.categorie === 'achat_materiaux' && (
@@ -258,10 +409,10 @@ export default function ChargesPage() {
                   </datalist>
                 </div>
               )}
-              {jourForm.categorie === 'autre' && (
+              {['autre', 'gasoil', 'main_oeuvre', 'reparations'].includes(jourForm.categorie) && (
                 <div className="xl:col-span-2">
                   <label className="label">Désignation *</label>
-                  <input className="input text-sm" value={jourForm.designation}
+                  <input className="input text-sm" placeholder="Ex: Plein gasoil pelle, Journaliers coffrage..." value={jourForm.designation}
                     onChange={e => setJourForm(f => ({ ...f, designation: e.target.value }))} />
                 </div>
               )}
@@ -287,108 +438,42 @@ export default function ChargesPage() {
                 Montant : <strong className="text-gray-800">{fmt.currency(jourForm.quantite * jourForm.prix_unitaire)}</strong>
               </span>
               <div className="flex gap-2">
-                <button onClick={() => { if (!jourForm.designation) { toast.error('Désignation requise'); return; } createJourMut.mutate(); }}
-                  disabled={createJourMut.isPending} className="btn-primary text-sm">
-                  {createJourMut.isPending ? 'Ajout...' : 'Ajouter'}
-                </button>
-                <button onClick={() => setShowJourForm(false)} className="btn-secondary text-sm">Annuler</button>
+                <Button onClick={() => {
+                  if (!jourForm.designation) { toast.error('Désignation requise'); return; }
+                  if (editingId) updateJourMut.mutate(); else createJourMut.mutate();
+                }} loading={createJourMut.isPending || updateJourMut.isPending}>
+                  {editingId
+                    ? (updateJourMut.isPending ? 'Enregistrement...' : 'Enregistrer les modifications')
+                    : (createJourMut.isPending ? 'Ajout...' : 'Ajouter')}
+                </Button>
+                <Button variant="secondary" onClick={resetJourForm}>Annuler</Button>
               </div>
             </div>
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="table-header">Date</th>
-                <th className="table-header">Catégorie</th>
-                <th className="table-header">Désignation</th>
-                <th className="table-header text-right">Qté</th>
-                <th className="table-header text-right">Prix unit.</th>
-                <th className="table-header text-right">Montant</th>
-                <th className="table-header">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {loadingJour && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm animate-pulse">Chargement...</td></tr>}
-              {chargesJour.map(c => (
-                <tr key={c.id} className="hover:bg-gray-50">
-                  <td className="table-cell">{fmt.date(c.date_jour)}</td>
-                  <td className="table-cell">
-                    <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-                      {c.categorie === 'location_materiel' ? <Truck className="w-3.5 h-3.5" /> : c.categorie === 'achat_materiaux' ? <Package className="w-3.5 h-3.5" /> : null}
-                      {CATEGORIES_JOUR[c.categorie]}
-                    </span>
-                  </td>
-                  <td className="table-cell font-medium">{c.designation}</td>
-                  <td className="table-cell text-right">{fmt.number(c.quantite)} {c.unite}</td>
-                  <td className="table-cell text-right">{fmt.currency(c.prix_unitaire)}</td>
-                  <td className="table-cell text-right font-semibold">{fmt.currency(c.montant)}</td>
-                  <td className="table-cell">
-                    <button onClick={() => { if (confirm('Supprimer cette charge ?')) deleteJourMut.mutate(c.id); }}
-                      className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
-                  </td>
-                </tr>
-              ))}
-              {!loadingJour && !chargesJour.length && (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400 text-sm">Aucune charge journalière pour ce mois</td></tr>
-              )}
-            </tbody>
-            {chargesJour.length > 0 && (
-              <tfoot className="border-t bg-brand-50">
-                <tr>
-                  <td colSpan={5} className="px-4 py-3 text-right font-bold text-brand-700 text-sm">TOTAL JOURNALIER</td>
-                  <td className="px-4 py-3 text-right font-bold text-brand-700">{fmt.currency(totalJour)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
+        <Table<ChargeJournaliere>
+          columns={chargeJourColumns}
+          data={chargesJour}
+          rowKey={(c) => c.id}
+          loading={loadingJour}
+          emptyMessage="Aucune charge journalière pour ce mois"
+          footer={chargeJourFooter}
+        />
+      </Card>
 
       {/* Historique */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b">
-          <h3 className="font-semibold text-gray-800">Historique des mois renseignés</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="table-header">Mois</th>
-                <th className="table-header text-right">Total charges</th>
-                <th className="table-header text-right">Objectif</th>
-                <th className="table-header text-right">Marge</th>
-                <th className="table-header">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {isLoading && <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm animate-pulse">Chargement...</td></tr>}
-              {charges.map(c => {
-                const t = CHAMPS.reduce((s, ch) => s + (Number(c[ch.key]) || 0), 0);
-                const m = (Number(c.objectif_mensuel) || 0) - t;
-                return (
-                  <tr key={c.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setMois(c.mois)}>
-                    <td className="table-cell font-medium">{c.mois}</td>
-                    <td className="table-cell text-right">{fmt.currency(t)}</td>
-                    <td className="table-cell text-right text-gray-500">{fmt.currency(c.objectif_mensuel)}</td>
-                    <td className={`table-cell text-right font-semibold ${m >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt.currency(m)}</td>
-                    <td className="table-cell">
-                      <button onClick={(e) => { e.stopPropagation(); if (confirm('Supprimer ce mois ?')) deleteMut.mutate(c.id); }}
-                        className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!isLoading && !charges.length && (
-                <tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400 text-sm">Aucune charge renseignée</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Card padded={false}>
+        <CardHeader title="Historique des mois renseignés" />
+        <Table<ChargeMensuelle>
+          columns={historiqueColumns}
+          data={charges}
+          rowKey={(c) => c.id}
+          loading={isLoading}
+          emptyMessage="Aucune charge renseignée"
+          onRowClick={(c) => setMois(c.mois)}
+        />
+      </Card>
     </div>
   );
 }
