@@ -2,10 +2,11 @@
 // src/components/layout/sidebar.tsx — Navigation principale
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, FileText, ShoppingCart, Receipt, BarChart3,
   Package, FolderOpen, HardHat, Users, Bell, Settings, LogOut,
-  Building2, ChevronRight,
+  Building2, ChevronRight, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/store';
@@ -25,15 +26,28 @@ const NAV_ITEMS = [
 ];
 
 const SECONDARY_ITEMS = [
+  { label: 'Alertes',         href: '/alertes',      icon: AlertTriangle },
   { label: 'Utilisateurs',    href: '/utilisateurs', icon: Users,    roles: ['admin','directeur'] },
   { label: 'Notifications',   href: '/notifications',icon: Bell },
   { label: 'Paramètres',      href: '/parametres',   icon: Settings },
 ];
 
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '';
+
 export function Sidebar() {
   const pathname = usePathname();
   const router   = useRouter();
   const { user, logout } = useAuthStore();
+
+  const { data: alertesSummary } = useQuery({
+    queryKey: ['alertes-summary'],
+    queryFn: () => fetch(`${API}/api/alertes/summary`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(r => r.json()).then(r => r.data),
+    refetchInterval: 30000,
+  });
+  const alertesActives = alertesSummary?.total_actives ? parseInt(alertesSummary.total_actives, 10) : 0;
+  const BADGES: Record<string, number> = { '/alertes': alertesActives };
 
   const handleLogout = async () => {
     try { await authService.logout(); } catch (_) {}
@@ -42,7 +56,7 @@ export function Sidebar() {
     toast.success('Déconnexion réussie');
   };
 
-  const NavLink = ({ item }: { item: typeof NAV_ITEMS[number] }) => {
+  const NavLink = ({ item, badge }: { item: typeof NAV_ITEMS[number]; badge?: number }) => {
     const active = pathname === item.href || pathname.startsWith(item.href + '/');
     return (
       <Link href={item.href}
@@ -54,7 +68,12 @@ export function Sidebar() {
         )}>
         <item.icon className={cn('w-5 h-5 flex-shrink-0', active ? 'text-white' : 'text-gray-500 group-hover:text-gray-300')} />
         <span>{item.label}</span>
-        {active && <ChevronRight className="w-3.5 h-3.5 ml-auto" />}
+        {!!badge && badge > 0 && (
+          <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+            {badge}
+          </span>
+        )}
+        {active && !badge && <ChevronRight className="w-3.5 h-3.5 ml-auto" />}
       </Link>
     );
   };
@@ -82,7 +101,7 @@ export function Sidebar() {
         <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider px-3 mt-5 mb-2 pt-4 border-t border-white/5">
           Administration
         </p>
-        {SECONDARY_ITEMS.map((item) => <NavLink key={item.href} item={item as any} />)}
+        {SECONDARY_ITEMS.map((item) => <NavLink key={item.href} item={item as any} badge={BADGES[item.href]} />)}
       </nav>
 
       {/* Profil utilisateur */}
