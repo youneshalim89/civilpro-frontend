@@ -84,6 +84,13 @@ export default function DocumentsPage() {
     return acc;
   }, {});
 
+  const typeStats = Object.entries(grouped).map(([type, items]) => ({
+    type,
+    label: TYPES_DOCUMENT.find((t) => t.value === type)?.label || type,
+    count: (items as any[]).length,
+  }));
+  const recentDocs = documents.slice(0, 5);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -130,6 +137,33 @@ export default function DocumentsPage() {
                 accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip"
                 onChange={handleUpload} disabled={uploading || !marcheId} />
             </label>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="card p-4">
+          <h3 className="font-semibold text-gray-800 mb-3">Répartition par type</h3>
+          <div className="space-y-2">
+            {typeStats.length === 0 && <p className="text-sm text-gray-400">Aucun document pour le moment</p>}
+            {typeStats.map((stat) => (
+              <div key={stat.type} className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">{stat.label}</span>
+                <span className="font-medium text-gray-800">{stat.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="card p-4">
+          <h3 className="font-semibold text-gray-800 mb-3">Documents récents</h3>
+          <div className="space-y-2">
+            {recentDocs.length === 0 && <p className="text-sm text-gray-400">Aucun document récent</p>}
+            {recentDocs.map((doc: any) => (
+              <div key={doc.id} className="flex items-center justify-between text-sm">
+                <span className="text-gray-600 truncate max-w-[180px]">{doc.nom_original || doc.nom_fichier}</span>
+                <span className="text-gray-400">{fmt.date(doc.created_at)}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
