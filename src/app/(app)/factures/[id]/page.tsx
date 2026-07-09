@@ -15,12 +15,18 @@ const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl
 const apiFetch = (url: string, opts?: RequestInit) =>
   fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
+// Composants de date locaux (pas toISOString) — même correctif que Fix-Pointage-TZ.
+const toLocalDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const todayLocal = () => toLocalDateStr(new Date());
+
 export default function FactureDetailPage() {
   const { id }  = useParams<{ id: string }>();
   const qc      = useQueryClient();
   const [paiementModal, setPaiementModal] = useState(false);
   const [montantPaye,   setMontantPaye]   = useState(0);
   const [reference,     setReference]     = useState('');
+  const [datePaiement,  setDatePaiement]  = useState(todayLocal());
 
   const { data, isLoading } = useQuery({
     queryKey: ['facture', id],
@@ -92,7 +98,7 @@ export default function FactureDetailPage() {
           )}
           {f.statut === 'validee' && (
             <Button size="sm" className="bg-green-600 hover:bg-green-700" icon={<CreditCard className="w-4 h-4" />}
-              onClick={() => { setPaiementModal(true); setMontantPaye(solde); }}>
+              onClick={() => { setPaiementModal(true); setMontantPaye(solde); setDatePaiement(todayLocal()); }}>
               Paiement
             </Button>
           )}
@@ -228,6 +234,11 @@ export default function FactureDetailPage() {
               value={montantPaye} onChange={setMontantPaye} autoFocus />
           </div>
           <div>
+            <label className="label">Date de paiement *</label>
+            <input type="date" className="input" value={datePaiement}
+              onChange={e => setDatePaiement(e.target.value)} />
+          </div>
+          <div>
             <label className="label">Référence de paiement</label>
             <input className="input" value={reference} onChange={e => setReference(e.target.value)}
               placeholder="N° virement, chèque..." />
@@ -239,8 +250,8 @@ export default function FactureDetailPage() {
           )}
         </div>
         <div className="flex gap-3 mt-6">
-          <Button disabled={paiementMut.isPending || montantPaye <= 0} loading={paiementMut.isPending} className="flex-1"
-            onClick={() => paiementMut.mutate({ montant_paye: montantPaye, reference_paiement: reference, date_paiement: new Date().toISOString().slice(0, 10) })}>
+          <Button disabled={paiementMut.isPending || montantPaye <= 0 || !datePaiement} loading={paiementMut.isPending} className="flex-1"
+            onClick={() => paiementMut.mutate({ montant_paye: montantPaye, reference_paiement: reference, date_paiement: datePaiement })}>
             {paiementMut.isPending ? 'Enregistrement...' : 'Valider le paiement'}
           </Button>
           <Button variant="secondary" className="flex-1" onClick={() => setPaiementModal(false)}>Annuler</Button>

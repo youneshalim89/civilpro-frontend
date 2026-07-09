@@ -2,9 +2,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, DollarSign, Trash2, BarChart3 } from 'lucide-react';
+import { ArrowLeft, DollarSign, Trash2, BarChart3, Receipt, FileCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { fmt, STATUTS_SITUATION } from '@/lib/utils';
+import { fmt, STATUTS_SITUATION, STATUTS_FACTURE } from '@/lib/utils';
 import { Card, Badge, Button, Loading } from '@/components/ui';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -43,6 +43,13 @@ export default function SituationDetailPage() {
     onError:    (err: any) => toast.error(err.message || 'Erreur lors de la suppression'),
   });
 
+  const factureMut = useMutation({
+    mutationFn: () => apiFetch(`/factures/from-situation/${id}`, { method: 'POST' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
+    onSuccess:  (r) => { toast.success('Facture créée'); router.push(`/factures/${r.data.id}`); },
+    onError:    (err: any) => toast.error(err.message || 'Erreur lors de la facturation'),
+  });
+
   if (isLoading) return <Loading />;
   if (!situation) return <p className="text-gray-500">Décompte introuvable.</p>;
 
@@ -67,6 +74,23 @@ export default function SituationDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {s.facture_id ? (
+            <Link href={`/factures/${s.facture_id}`}>
+              <Badge className={`text-sm px-3 py-1.5 flex items-center gap-1.5 cursor-pointer ${STATUTS_FACTURE[s.facture_statut]?.color || 'bg-gray-100 text-gray-700'}`}>
+                <FileCheck className="w-3.5 h-3.5" /> Facturée : {s.facture_numero}
+              </Badge>
+            </Link>
+          ) : s.statut !== 'rejete' && (
+            <Button size="sm" icon={<Receipt className="w-4 h-4" />} disabled={factureMut.isPending} loading={factureMut.isPending}
+              onClick={() => {
+                const msg = s.statut === 'paye'
+                  ? `⚠️ Ce décompte N°${s.numero_situation} est déjà marqué PAYÉ. Créer quand même la facture ?`
+                  : `Créer la facture pour ce décompte (montant net ${fmt.currency(s.montant_net)}) ?`;
+                if (confirm(msg)) factureMut.mutate();
+              }}>
+              {factureMut.isPending ? 'Création...' : 'Facturer cette situation'}
+            </Button>
+          )}
           {s.statut === 'en_cours' && (
             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" icon={<DollarSign className="w-4 h-4" />}
               onClick={() => { if (confirm('Marquer ce décompte comme approuvé et payé ?')) statutMut.mutate('paye'); }}>
