@@ -4,10 +4,14 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { marchesService } from '@/lib/api';
+import { marchesService, projetsService, type ProjetLite } from '@/lib/api';
+import { STATUTS_MARCHE } from '@/lib/utils';
+import { Card, Input, Button } from '@/components/ui';
 import NumberInput from '@/components/NumberInput';
 
-const STATUTS = ['en_attente','en_cours','acheve','en_retard','resilie','suspendu'];
+const fieldClassName = 'w-full';
+
+const STATUTS = Object.keys(STATUTS_MARCHE);
 
 export default function ModifierMarchePage() {
   const router         = useRouter();
@@ -15,6 +19,11 @@ export default function ModifierMarchePage() {
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [form, setForm] = useState<any>({});
+  const [projets, setProjets] = useState<ProjetLite[]>([]);
+
+  useEffect(() => {
+    projetsService.list().then(r => setProjets(r.data.data || [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     marchesService.get(id).then(r => {
@@ -31,6 +40,7 @@ export default function ModifierMarchePage() {
         taux_retenue_garantie:   Number(m.taux_retenue_garantie) || 7,
         statut:                  m.statut || 'en_cours',
         avancement_physique:     Number(m.avancement_physique) || 0,
+        projet_id:               m.projet_id || '',
       });
     }).catch(() => toast.error('Marché introuvable'))
       .finally(() => setLoading(false));
@@ -50,7 +60,7 @@ export default function ModifierMarchePage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await marchesService.update(id, form);
+      await marchesService.update(id, { ...form, projet_id: form.projet_id || null });
       toast.success('Marché mis à jour');
       router.push(`/marches/${id}`);
     } catch (err: any) {
@@ -76,92 +86,89 @@ export default function ModifierMarchePage() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Identification */}
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Identification</h3>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Numéro du marché *</label>
-              <input className="input" value={form.numero_marche || ''} onChange={set('numero_marche')} required />
-            </div>
-            <div>
-              <label className="label">Maître d'ouvrage *</label>
-              <input className="input" value={form.maitre_ouvrage || ''} onChange={set('maitre_ouvrage')} required />
-            </div>
+            <Input label="Numéro du marché *" value={form.numero_marche || ''} onChange={set('numero_marche')} required className={fieldClassName} />
+            <Input label="Maître d'ouvrage *" value={form.maitre_ouvrage || ''} onChange={set('maitre_ouvrage')} required className={fieldClassName} />
             <div className="xl:col-span-2">
-              <label className="label">Objet *</label>
-              <textarea className="input" rows={3} value={form.objet || ''} onChange={set('objet')} required />
+              <label className="label" htmlFor="marche-objet">Objet *</label>
+              <textarea id="marche-objet" className="input w-full" rows={3} value={form.objet || ''} onChange={set('objet')} required />
             </div>
+            <Input label="Entreprise attributaire" value={form.entreprise_attributaire || ''} onChange={set('entreprise_attributaire')} className={fieldClassName} />
             <div>
-              <label className="label">Entreprise attributaire</label>
-              <input className="input" value={form.entreprise_attributaire || ''} onChange={set('entreprise_attributaire')} />
-            </div>
-            <div>
-              <label className="label">Statut</label>
-              <select className="input" value={form.statut || ''} onChange={set('statut')}>
+              <label className="label" htmlFor="marche-statut">Statut</label>
+              <select id="marche-statut" className="input w-full" value={form.statut || ''} onChange={set('statut')}>
                 {STATUTS.map(s => (
                   <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
                 ))}
               </select>
             </div>
+            <div>
+              <label className="label" htmlFor="marche-projet">Projet lié</label>
+              <select id="marche-projet" className="input w-full" value={form.projet_id || ''} onChange={set('projet_id')}>
+                <option value="">Aucun projet</option>
+                {projets.map(p => (
+                  <option key={p.id} value={p.id}>{p.code_projet} — {p.nom}</option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
+        </Card>
 
         {/* Financier */}
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Données financières</h3>
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div>
               <label className="label">Montant HT (MAD)</label>
-              <NumberInput min={0} className="input"
+              <NumberInput min={0} className="input w-full"
                 value={form.montant_initial || 0} onChange={v => setForm((f: any) => ({ ...f, montant_initial: v }))} />
             </div>
             <div>
               <label className="label">Taux TVA (%)</label>
-              <NumberInput min={0} max={100} className="input"
+              <NumberInput min={0} max={100} className="input w-full"
                 value={form.taux_tva || 0} onChange={v => setForm((f: any) => ({ ...f, taux_tva: v }))} />
             </div>
             <div>
               <label className="label">Retenue de garantie (%)</label>
-              <NumberInput min={0} max={100} className="input"
+              <NumberInput min={0} max={100} className="input w-full"
                 value={form.taux_retenue_garantie || 0} onChange={v => setForm((f: any) => ({ ...f, taux_retenue_garantie: v }))} />
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Délais + Avancement */}
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Délais & Avancement</h3>
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <div>
-              <label className="label">Date de commencement</label>
-              <input type="date" className="input" value={form.date_commencement || ''}
-                onChange={set('date_commencement')} />
-            </div>
+            <Input type="date" label="Date de commencement" value={form.date_commencement || ''}
+              onChange={set('date_commencement')} className={fieldClassName} />
             <div>
               <label className="label">Délai contractuel (jours)</label>
-              <NumberInput min={1} className="input"
+              <NumberInput min={1} className="input w-full"
                 value={form.delai_contractuel || 365} onChange={v => setForm((f: any) => ({ ...f, delai_contractuel: v }))} />
             </div>
             <div>
               <label className="label">Date fin prévue (calculée)</label>
-              <div className="input bg-gray-50 text-gray-700">{dateFin()}</div>
+              <div className="input bg-gray-50 text-gray-700 w-full">{dateFin()}</div>
             </div>
             <div className="xl:col-span-3">
-              <label className="label">
+              <label className="label" htmlFor="marche-avancement">
                 Avancement physique : <span className="font-bold text-brand-600">{form.avancement_physique || 0}%</span>
               </label>
-              <input type="range" min={0} max={100} step={0.5} className="w-full accent-brand-500"
+              <input id="marche-avancement" type="range" min={0} max={100} step={0.5} className="w-full accent-brand-500"
                 value={form.avancement_physique || 0} onChange={set('avancement_physique')} />
               <div className="flex justify-between text-xs text-gray-400 mt-1"><span>0%</span><span>50%</span><span>100%</span></div>
             </div>
           </div>
-        </div>
+        </Card>
 
         <div className="flex gap-3">
-          <button type="submit" disabled={saving} className="btn-primary">
+          <Button type="submit" loading={saving}>
             {saving ? 'Enregistrement...' : 'Enregistrer les modifications'}
-          </button>
-          <Link href={`/marches/${id}`} className="btn-secondary">Annuler</Link>
+          </Button>
+          <Link href={`/marches/${id}`} className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">Annuler</Link>
         </div>
       </form>
     </div>

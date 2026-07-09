@@ -5,10 +5,18 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2, Fuel, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { marchesService, materielService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import { ENGINS_PREDEFINIS } from '@/lib/constants';
+import { EnginsDatalist } from '@/components/marches/EnginsDatalist';
+import { Card, Badge, Table, Button } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
 import NumberInput from '@/components/NumberInput';
 import type { JournalMateriel } from '@/lib/api';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 const STATUTS: Record<string, { label: string; color: string }> = {
   operationnel: { label: 'Opérationnel', color: 'bg-green-100 text-green-700' },
@@ -16,21 +24,6 @@ const STATUTS: Record<string, { label: string; color: string }> = {
   entretien:    { label: 'Entretien',    color: 'bg-yellow-100 text-yellow-700' },
   arret:        { label: 'Arrêt',        color: 'bg-gray-100 text-gray-600' },
 };
-
-const ENGINS_PREDEFINIS = [
-  'MAN 8x4',
-  'Pelle hydraulique sur pneu 318',
-  'JCB',
-  'Camion malaxeur 8x4',
-  'Camion benne 7m³',
-  'Niveleuse',
-  'Compacteur 12T',
-  'Pick up A80',
-  'Dokker A48',
-  'Camion-citerne',
-  'Chargeuse',
-  'Poclain 318',
-];
 
 const emptyForm = {
   date_jour: new Date().toISOString().split('T')[0],
@@ -50,12 +43,12 @@ export default function MaterielPage() {
 
   const { data: marche } = useQuery({
     queryKey: ['marche', id],
-    queryFn:  () => marchesService.get(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${id}`).then(r => r.data),
   });
 
   const { data, isLoading } = useQuery({
     queryKey: ['materiel', id],
-    queryFn:  () => materielService.list(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${id}/materiel`).then(r => r.data),
   });
 
   const journal: JournalMateriel[] = data || [];
@@ -63,7 +56,8 @@ export default function MaterielPage() {
   const enginsDisponibles = Array.from(new Set([...ENGINS_PREDEFINIS, ...journal.map(j => j.engin)]));
 
   const createMut = useMutation({
-    mutationFn: () => materielService.create(id, form),
+    mutationFn: () => apiFetch(`/marches/${id}/materiel`, { method: 'POST', body: JSON.stringify(form) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => {
       qc.invalidateQueries({ queryKey: ['materiel', id] });
       toast.success('Entrée enregistrée');
@@ -74,7 +68,8 @@ export default function MaterielPage() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (entryId: string) => materielService.delete(id, entryId),
+    mutationFn: (entryId: string) => apiFetch(`/marches/${id}/materiel/${entryId}`, { method: 'DELETE' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['materiel', id] }); toast.success('Supprimé'); },
   });
 
@@ -82,6 +77,35 @@ export default function MaterielPage() {
   const totalGasoil = journal.reduce((s, j) => s + (Number(j.gasoil_consomme) || 0), 0);
   const enginsActifs = new Set(journal.map(j => j.engin)).size;
   const pannes = journal.filter(j => j.statut === 'panne').length;
+
+  const columns: TableColumn<JournalMateriel>[] = [
+    { key: 'date_jour', header: 'Date', render: (j) => fmt.date(j.date_jour) },
+    { key: 'engin', header: 'Engin', render: (j) => <span className="font-medium">{j.engin}</span> },
+    {
+      key: 'heures_travaillees', header: 'Heures', align: 'right',
+      render: (j) => <span className="inline-flex items-center gap-1 font-mono"><Clock className="w-3 h-3 text-gray-400" />{j.heures_travaillees} h</span>,
+    },
+    {
+      key: 'gasoil_consomme', header: 'Gasoil (L)', align: 'right',
+      render: (j) => <span className="inline-flex items-center gap-1 font-mono"><Fuel className="w-3 h-3 text-gray-400" />{j.gasoil_consomme} L</span>,
+    },
+    {
+      key: 'statut', header: 'Statut',
+      render: (j) => { const s = STATUTS[j.statut] || STATUTS.operationnel; return <Badge tone="gray" className={s.color}>{s.label}</Badge>; },
+    },
+    {
+      key: 'observation', header: 'Observation',
+      render: (j) => <p className="truncate max-w-xs text-sm text-gray-600">{j.observation || '—'}</p>,
+    },
+    { key: 'created_by_nom', header: 'Saisi par', render: (j) => <span className="text-xs text-gray-400">{j.created_by_nom || '—'}</span> },
+    {
+      key: 'actions', header: 'Actions',
+      render: (j) => (
+        <button onClick={() => { if (confirm('Supprimer cette entrée ?')) deleteMut.mutate(j.id); }}
+          className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-5">
@@ -95,34 +119,32 @@ export default function MaterielPage() {
             <p className="text-sm text-gray-500">{marche?.numero_marche} — {marche?.objet}</p>
           </div>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Enregistrer
-        </button>
+        <Button onClick={() => setShowForm(!showForm)} icon={<Plus className="w-4 h-4" />}>Enregistrer</Button>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="card p-4">
+        <Card className="p-4">
           <p className="text-xs text-gray-500">Engins suivis</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{enginsActifs}</p>
-        </div>
-        <div className="card p-4 border-l-4 border-blue-400">
+        </Card>
+        <Card className="p-4 border-l-4 border-blue-400">
           <p className="text-xs text-gray-500">Total heures travaillées</p>
           <p className="text-2xl font-bold text-blue-600 mt-1">{fmt.number(totalHeures)} h</p>
-        </div>
-        <div className="card p-4 border-l-4 border-amber-400">
+        </Card>
+        <Card className="p-4 border-l-4 border-amber-400">
           <p className="text-xs text-gray-500">Gasoil consommé</p>
           <p className="text-2xl font-bold text-amber-600 mt-1">{fmt.number(totalGasoil)} L</p>
-        </div>
-        <div className="card p-4 border-l-4 border-red-400">
+        </Card>
+        <Card className="p-4 border-l-4 border-red-400">
           <p className="text-xs text-gray-500">Pannes signalées</p>
           <p className="text-2xl font-bold text-red-600 mt-1">{pannes}</p>
-        </div>
+        </Card>
       </div>
 
       {/* Formulaire */}
       {showForm && (
-        <div className="card p-5 border-brand-200 border-2">
+        <Card className="border-brand-200 border-2">
           <h4 className="font-semibold text-sm text-gray-800 mb-3">Nouvelle entrée journal</h4>
           <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
             <div>
@@ -134,9 +156,7 @@ export default function MaterielPage() {
               <label className="label">Engin *</label>
               <input className="input text-sm" list="engins-list" placeholder="Sélectionner ou saisir..." value={form.engin}
                 onChange={e => setForm(f => ({ ...f, engin: e.target.value }))} />
-              <datalist id="engins-list">
-                {ENGINS_PREDEFINIS.map(e => <option key={e} value={e} />)}
-              </datalist>
+              <EnginsDatalist id="engins-list" />
             </div>
             <div>
               <label className="label">Heures travaillées</label>
@@ -162,17 +182,17 @@ export default function MaterielPage() {
             </div>
           </div>
           <div className="flex gap-2 mt-4">
-            <button onClick={() => { if (!form.engin) { toast.error('Engin requis'); return; } createMut.mutate(); }}
-              disabled={createMut.isPending} className="btn-primary text-sm">
+            <Button onClick={() => { if (!form.engin) { toast.error('Engin requis'); return; } createMut.mutate(); }}
+              loading={createMut.isPending}>
               {createMut.isPending ? 'Enregistrement...' : 'Enregistrer'}
-            </button>
-            <button onClick={() => setShowForm(false)} className="btn-secondary text-sm">Annuler</button>
+            </Button>
+            <Button variant="secondary" onClick={() => setShowForm(false)}>Annuler</Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Filtre par engin */}
-      <div className="card p-4 flex items-center gap-3">
+      <Card className="p-4 flex items-center gap-3">
         <label className="label mb-0 whitespace-nowrap">Filtrer par engin</label>
         <select className="input text-sm w-64" value={filtreEngin} onChange={e => setFiltreEngin(e.target.value)}>
           <option value="">Tous les engins</option>
@@ -181,55 +201,18 @@ export default function MaterielPage() {
         {filtreEngin && (
           <button onClick={() => setFiltreEngin('')} className="text-xs text-brand-600 hover:underline">Réinitialiser</button>
         )}
-      </div>
+      </Card>
 
       {/* Tableau journal */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="table-header">Date</th>
-                <th className="table-header">Engin</th>
-                <th className="table-header text-right">Heures</th>
-                <th className="table-header text-right">Gasoil (L)</th>
-                <th className="table-header">Statut</th>
-                <th className="table-header">Observation</th>
-                <th className="table-header">Saisi par</th>
-                <th className="table-header">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {isLoading && <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400 text-sm animate-pulse">Chargement...</td></tr>}
-              {journalFiltre.map(j => {
-                const s = STATUTS[j.statut] || STATUTS.operationnel;
-                return (
-                  <tr key={j.id} className="hover:bg-gray-50">
-                    <td className="table-cell">{fmt.date(j.date_jour)}</td>
-                    <td className="table-cell font-medium">{j.engin}</td>
-                    <td className="table-cell text-right font-mono">
-                      <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3 text-gray-400" />{j.heures_travaillees} h</span>
-                    </td>
-                    <td className="table-cell text-right font-mono">
-                      <span className="inline-flex items-center gap-1"><Fuel className="w-3 h-3 text-gray-400" />{j.gasoil_consomme} L</span>
-                    </td>
-                    <td className="table-cell"><span className={`badge ${s.color}`}>{s.label}</span></td>
-                    <td className="table-cell text-sm text-gray-600 max-w-xs"><p className="truncate">{j.observation || '—'}</p></td>
-                    <td className="table-cell text-xs text-gray-400">{j.created_by_nom || '—'}</td>
-                    <td className="table-cell">
-                      <button onClick={() => { if (confirm('Supprimer cette entrée ?')) deleteMut.mutate(j.id); }}
-                        className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!isLoading && !journalFiltre.length && (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">Aucune entrée dans le journal</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Card padded={false}>
+        <Table<JournalMateriel>
+          columns={columns}
+          data={journalFiltre}
+          rowKey={(j) => j.id}
+          loading={isLoading}
+          emptyMessage="Aucune entrée dans le journal"
+        />
+      </Card>
     </div>
   );
 }

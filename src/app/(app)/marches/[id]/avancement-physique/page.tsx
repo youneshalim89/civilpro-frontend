@@ -7,6 +7,8 @@ import { ArrowLeft, Plus, Trash2, AlertTriangle, HardHat } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { marchesService, avancementPhysiqueService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import { Card, CardHeader, Table, Button } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
 import NumberInput from '@/components/NumberInput';
 
 export default function AvancementPhysiquePage() {
@@ -85,6 +87,20 @@ export default function AvancementPhysiquePage() {
   const avancementPhysiqueMarche  = Number(marche?.avancement_physique) || 0;
   const incoherent = avancementPhysiqueMarche < avancementFinancierMarche;
 
+  const releveColumns: TableColumn<any>[] = [
+    { key: 'date_releve', header: 'Date', render: (r) => fmt.date(r.date_releve) },
+    { key: 'avancement_physique', header: 'Avancement physique', align: 'right', render: (r) => <span className="font-semibold text-blue-600">{fmt.pct(r.avancement_physique)}</span> },
+    { key: 'observations', header: 'Observations', render: (r) => <p className="truncate max-w-xs text-xs text-gray-500">{r.observations || '—'}</p> },
+    { key: 'created_by_nom', header: 'Saisi par', render: (r) => <span className="text-xs text-gray-400">{r.created_by_nom || '—'}</span> },
+    {
+      key: 'actions', header: '',
+      render: (r) => (
+        <button onClick={() => { if (confirm('Supprimer ce relevé ?')) deleteMut.mutate(r.id); }}
+          className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -97,39 +113,38 @@ export default function AvancementPhysiquePage() {
             <p className="text-sm text-gray-500">{marche?.numero_marche} — {marche?.objet}</p>
           </div>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nouveau relevé
-        </button>
+        <Button onClick={() => setShowForm(!showForm)} icon={<Plus className="w-4 h-4" />}>Nouveau relevé</Button>
       </div>
 
       <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
-        <div className="card p-4 border-l-4 border-blue-400">
+        <Card className="p-4 border-l-4 border-blue-400">
           <p className="text-xs text-gray-500">Avancement physique (travaux exécutés)</p>
           <p className="text-2xl font-bold text-blue-600 mt-1">{fmt.pct(avancementPhysiqueMarche)}</p>
-        </div>
-        <div className="card p-4 border-l-4 border-brand-400">
+        </Card>
+        <Card className="p-4 border-l-4 border-brand-400">
           <p className="text-xs text-gray-500">Avancement financier (décomptes)</p>
           <p className="text-2xl font-bold text-brand-600 mt-1">{fmt.pct(avancementFinancierMarche)}</p>
-        </div>
-        <div className={`card p-4 border-l-4 ${incoherent ? 'border-red-400' : 'border-green-400'}`}>
+        </Card>
+        <Card className={`p-4 border-l-4 ${incoherent ? 'border-red-400' : 'border-green-400'}`}>
           <p className="text-xs text-gray-500">Cohérence</p>
           <p className={`text-sm font-semibold mt-1 flex items-center gap-1 ${incoherent ? 'text-red-600' : 'text-green-600'}`}>
             {incoherent ? <><AlertTriangle className="w-4 h-4" /> Physique &lt; Financier</> : <>Physique ≥ Financier ✓</>}
           </p>
-        </div>
+        </Card>
       </div>
 
       {showForm && (
-        <div className="card overflow-hidden border-brand-200 border-2">
-          <div className="px-5 py-4 border-b flex items-center justify-between flex-wrap gap-3">
-            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-              <HardHat className="w-4 h-4 text-brand-500" /> Nouveau relevé d'avancement physique
-            </h3>
-            <div className="flex items-center gap-3">
-              <input type="date" className="input text-sm w-44" value={dateReleve} onChange={e => setDateReleve(e.target.value)} />
-              <span className="text-sm text-gray-500">Avancement calculé : <strong className="text-blue-600">{avancementPreview.toFixed(1)}%</strong></span>
-            </div>
-          </div>
+        <Card padded={false} className="border-brand-200 border-2">
+          <CardHeader
+            className="flex-wrap gap-3"
+            title={<span className="flex items-center gap-2"><HardHat className="w-4 h-4 text-brand-500" /> Nouveau relevé d'avancement physique</span>}
+            action={
+              <div className="flex items-center gap-3">
+                <input type="date" className="input text-sm w-44" value={dateReleve} onChange={e => setDateReleve(e.target.value)} />
+                <span className="text-sm text-gray-500">Avancement calculé : <strong className="text-blue-600">{avancementPreview.toFixed(1)}%</strong></span>
+              </div>
+            }
+          />
 
           {loadingPrep ? (
             <div className="p-8 text-center text-gray-400 text-sm">Chargement des prestations...</div>
@@ -176,51 +191,26 @@ export default function AvancementPhysiquePage() {
             <label className="label">Observations</label>
             <input className="input text-sm" value={observations} onChange={e => setObservations(e.target.value)} />
             <div className="flex gap-2 mt-3">
-              <button onClick={() => createMut.mutate()} disabled={createMut.isPending || loadingPrep}
-                className="btn-primary text-sm">{createMut.isPending ? 'Enregistrement...' : 'Enregistrer le relevé'}</button>
-              <button onClick={() => setShowForm(false)} className="btn-secondary text-sm">Annuler</button>
+              <Button onClick={() => createMut.mutate()} loading={createMut.isPending || loadingPrep}>
+                {createMut.isPending ? 'Enregistrement...' : 'Enregistrer le relevé'}
+              </Button>
+              <Button variant="secondary" onClick={() => setShowForm(false)}>Annuler</Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Historique des relevés */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b">
-          <h3 className="font-semibold text-gray-800">Historique des relevés</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="table-header">Date</th>
-                <th className="table-header text-right">Avancement physique</th>
-                <th className="table-header">Observations</th>
-                <th className="table-header">Saisi par</th>
-                <th className="table-header"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {isLoading && <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm animate-pulse">Chargement...</td></tr>}
-              {releveList.map(r => (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="table-cell">{fmt.date(r.date_releve)}</td>
-                  <td className="table-cell text-right font-semibold text-blue-600">{fmt.pct(r.avancement_physique)}</td>
-                  <td className="table-cell text-gray-500 text-xs max-w-xs"><p className="truncate">{r.observations || '—'}</p></td>
-                  <td className="table-cell text-xs text-gray-400">{r.created_by_nom || '—'}</td>
-                  <td className="table-cell">
-                    <button onClick={() => { if (confirm('Supprimer ce relevé ?')) deleteMut.mutate(r.id); }}
-                      className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
-                  </td>
-                </tr>
-              ))}
-              {!isLoading && !releveList.length && (
-                <tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400 text-sm">Aucun relevé pour ce marché</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Card padded={false}>
+        <CardHeader title="Historique des relevés" />
+        <Table<any>
+          columns={releveColumns}
+          data={releveList}
+          rowKey={(r) => r.id}
+          loading={isLoading}
+          emptyMessage="Aucun relevé pour ce marché"
+        />
+      </Card>
     </div>
   );
 }

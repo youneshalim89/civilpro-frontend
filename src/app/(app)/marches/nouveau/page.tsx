@@ -1,11 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Building2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { marchesService } from '@/lib/api';
+import { marchesService, projetsService, type ProjetLite } from '@/lib/api';
+import { Card, Input, Button } from '@/components/ui';
 import NumberInput from '@/components/NumberInput';
+
+const fieldClassName = 'w-full';
 
 export default function NouveauMarchePage() {
   const router = useRouter();
@@ -20,8 +23,14 @@ export default function NouveauMarchePage() {
     taux_tva:                20,
     taux_retenue_garantie:   7,
     chef_marche_id:          '',
+    projet_id:               '',
   });
   const [saving, setSaving] = useState(false);
+  const [projets, setProjets] = useState<ProjetLite[]>([]);
+
+  useEffect(() => {
+    projetsService.list().then(r => setProjets(r.data.data || [])).catch(() => {});
+  }, []);
 
   const dateFin = () => {
     const d = new Date(form.date_commencement);
@@ -39,7 +48,7 @@ export default function NouveauMarchePage() {
     }
     setSaving(true);
     try {
-      const res = await marchesService.create(form);
+      const res = await marchesService.create({ ...form, projet_id: form.projet_id || undefined });
       toast.success(`Marché ${form.numero_marche} créé avec succès`);
       router.push(`/marches/${res.data.data.id}`);
     } catch (err: any) {
@@ -63,50 +72,50 @@ export default function NouveauMarchePage() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Identification */}
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <Building2 className="w-4 h-4 text-brand-500" /> Identification du marché
           </h3>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Numéro du marché *</label>
-              <input className="input" value={form.numero_marche} onChange={set('numero_marche')}
-                placeholder="Ex: M-2026-001" required />
-            </div>
-            <div>
-              <label className="label">Maître d'ouvrage *</label>
-              <input className="input" value={form.maitre_ouvrage} onChange={set('maitre_ouvrage')}
-                placeholder="Ex: Ministère de l'Équipement" required />
-            </div>
+            <Input label="Numéro du marché *" value={form.numero_marche} onChange={set('numero_marche')}
+              placeholder="Ex: M-2026-001" required className={fieldClassName} />
+            <Input label="Maître d'ouvrage *" value={form.maitre_ouvrage} onChange={set('maitre_ouvrage')}
+              placeholder="Ex: Ministère de l'Équipement" required className={fieldClassName} />
             <div className="xl:col-span-2">
               <label className="label">Objet du marché *</label>
-              <textarea className="input" rows={3} value={form.objet} onChange={set('objet')}
+              <textarea className="input w-full" rows={3} value={form.objet} onChange={set('objet')}
                 placeholder="Description complète de l'objet du marché..." required />
             </div>
+            <Input label="Entreprise attributaire" value={form.entreprise_attributaire} onChange={set('entreprise_attributaire')} className={fieldClassName} />
             <div>
-              <label className="label">Entreprise attributaire</label>
-              <input className="input" value={form.entreprise_attributaire} onChange={set('entreprise_attributaire')} />
+              <label className="label">Projet lié</label>
+              <select className="input w-full" value={form.projet_id} onChange={set('projet_id')}>
+                <option value="">Aucun projet</option>
+                {projets.map(p => (
+                  <option key={p.id} value={p.id}>{p.code_projet} — {p.nom}</option>
+                ))}
+              </select>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Données financières */}
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Données financières</h3>
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div>
               <label className="label">Montant du marché (MAD HT) *</label>
-              <NumberInput min={0} className="input" value={form.montant_initial}
+              <NumberInput min={0} className="input w-full" value={form.montant_initial}
                 onChange={v => setForm(f => ({ ...f, montant_initial: v }))} />
             </div>
             <div>
               <label className="label">Taux TVA (%)</label>
-              <NumberInput min={0} max={100} className="input" value={form.taux_tva}
+              <NumberInput min={0} max={100} className="input w-full" value={form.taux_tva}
                 onChange={v => setForm(f => ({ ...f, taux_tva: v }))} />
             </div>
             <div>
               <label className="label">Retenue de garantie (%)</label>
-              <NumberInput min={0} max={100} className="input" value={form.taux_retenue_garantie}
+              <NumberInput min={0} max={100} className="input w-full" value={form.taux_retenue_garantie}
                 onChange={v => setForm(f => ({ ...f, taux_retenue_garantie: v }))} />
             </div>
             {form.montant_initial > 0 && (
@@ -117,34 +126,31 @@ export default function NouveauMarchePage() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Délais */}
-        <div className="card p-5">
+        <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Délais contractuels</h3>
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <div>
-              <label className="label">Date de commencement *</label>
-              <input type="date" className="input" value={form.date_commencement}
-                onChange={set('date_commencement')} required />
-            </div>
+            <Input type="date" label="Date de commencement *" value={form.date_commencement}
+              onChange={set('date_commencement')} required className={fieldClassName} />
             <div>
               <label className="label">Délai contractuel (jours) *</label>
-              <NumberInput min={1} className="input" value={form.delai_contractuel}
+              <NumberInput min={1} className="input w-full" value={form.delai_contractuel}
                 onChange={v => setForm(f => ({ ...f, delai_contractuel: v }))} />
             </div>
             <div>
               <label className="label">Date fin prévue (calculée)</label>
-              <div className="input bg-gray-50 text-gray-700 font-medium">{dateFin()}</div>
+              <div className="input bg-gray-50 text-gray-700 font-medium w-full">{dateFin()}</div>
             </div>
           </div>
-        </div>
+        </Card>
 
         <div className="flex gap-3">
-          <button type="submit" disabled={saving} className="btn-primary">
+          <Button type="submit" loading={saving}>
             {saving ? 'Création en cours...' : 'Créer le marché'}
-          </button>
-          <Link href="/marches" className="btn-secondary">Annuler</Link>
+          </Button>
+          <Link href="/marches" className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">Annuler</Link>
         </div>
       </form>
     </div>

@@ -5,16 +5,18 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2, Wrench, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { marchesService, entretienMaterielService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import { ENGINS_PREDEFINIS } from '@/lib/constants';
+import { EnginsDatalist } from '@/components/marches/EnginsDatalist';
+import { Card, Badge, Table, Button } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
 import NumberInput from '@/components/NumberInput';
 import type { EntretienMateriel } from '@/lib/api';
 
-const ENGINS_PREDEFINIS = [
-  'MAN 8x4', 'Pelle hydraulique sur pneu 318', 'JCB', 'Camion malaxeur 8x4',
-  'Camion benne 7m³', 'Niveleuse', 'Compacteur 12T', 'Pick up A80', 'Dokker A48',
-  'Camion-citerne', 'Chargeuse', 'Poclain 318',
-];
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 const TYPES_ENTRETIEN: Record<string, string> = {
   pneumatique:       'Pneumatique',
@@ -60,12 +62,12 @@ export default function EntretienMaterielPage() {
 
   const { data: marche } = useQuery({
     queryKey: ['marche', id],
-    queryFn:  () => marchesService.get(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${id}`).then(r => r.data),
   });
 
   const { data, isLoading } = useQuery({
     queryKey: ['entretien-materiel', id],
-    queryFn:  () => entretienMaterielService.list(id).then(r => r.data.data),
+    queryFn:  () => apiFetch(`/marches/${id}/entretien-materiel`).then(r => r.data),
   });
 
   const entretiens: EntretienMateriel[] = data || [];
@@ -77,7 +79,8 @@ export default function EntretienMaterielPage() {
   const totalReste   = filtres.reduce((s, e) => s + Number(e.reste_a_regler), 0);
 
   const createMut = useMutation({
-    mutationFn: () => entretienMaterielService.create(id, form),
+    mutationFn: () => apiFetch(`/marches/${id}/entretien-materiel`, { method: 'POST', body: JSON.stringify(form) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['entretien-materiel', id] });
       toast.success('Entretien enregistré');
@@ -88,7 +91,9 @@ export default function EntretienMaterielPage() {
   });
 
   const updateAvanceMut = useMutation({
-    mutationFn: ({ entId, avance }: { entId: string; avance: number }) => entretienMaterielService.updateAvance(id, entId, avance),
+    mutationFn: ({ entId, avance }: { entId: string; avance: number }) =>
+      apiFetch(`/marches/${id}/entretien-materiel/${entId}`, { method: 'PATCH', body: JSON.stringify({ avance }) })
+        .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['entretien-materiel', id] });
       toast.success('Avance mise à jour');
@@ -97,9 +102,69 @@ export default function EntretienMaterielPage() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (entId: string) => entretienMaterielService.delete(id, entId),
+    mutationFn: (entId: string) => apiFetch(`/marches/${id}/entretien-materiel/${entId}`, { method: 'DELETE' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['entretien-materiel', id] }); toast.success('Supprimé'); },
   });
+
+  const columns: TableColumn<EntretienMateriel>[] = [
+    { key: 'date_entretien', header: 'Date', render: (e) => fmt.date(e.date_entretien) },
+    { key: 'engin', header: 'Engin', render: (e) => <span className="font-medium">{e.engin}</span> },
+    {
+      key: 'designation', header: 'Entretien',
+      render: (e) => <p className="truncate max-w-[180px] text-gray-600">{e.designation || '—'}</p>,
+    },
+    {
+      key: 'type_entretien', header: 'Type',
+      render: (e) => <Badge tone="gray" className="bg-blue-50 text-blue-700 text-xs">{TYPES_ENTRETIEN[e.type_entretien] || e.type_entretien}</Badge>,
+    },
+    { key: 'montant', header: 'Montant', align: 'right', render: (e) => <span className="font-semibold">{fmt.currency(e.montant)}</span> },
+    {
+      key: 'avance', header: 'Avance', align: 'right',
+      render: (e) => editingAvance?.id === e.id ? (
+        <div className="flex items-center gap-1 justify-end">
+          <NumberInput className="input text-xs py-1 w-24 text-right" max={e.montant}
+            value={editingAvance.value} onChange={v => setEditingAvance({ id: e.id, value: v })} />
+          <button onClick={() => updateAvanceMut.mutate({ entId: e.id, avance: editingAvance.value })}
+            className="p-1 hover:bg-green-50 rounded"><CheckCircle2 className="w-4 h-4 text-green-500" /></button>
+        </div>
+      ) : (
+        <button onClick={() => setEditingAvance({ id: e.id, value: Number(e.avance) })}
+          className="text-blue-600 hover:underline">{fmt.currency(e.avance)}</button>
+      ),
+    },
+    {
+      key: 'reste_a_regler', header: 'Reste à régler', align: 'right',
+      render: (e) => {
+        const reste = Number(e.reste_a_regler);
+        return <span className={`font-bold ${reste <= 0 ? 'text-green-600' : reste < e.montant ? 'text-amber-600' : 'text-red-600'}`}>{fmt.currency(reste)}</span>;
+      },
+    },
+    {
+      key: 'statut', header: 'Statut',
+      render: (e) => {
+        const st = statutOf(Number(e.reste_a_regler), Number(e.montant));
+        return <Badge tone="gray" className={st.color}>{st.label}</Badge>;
+      },
+    },
+    {
+      key: 'actions', header: '',
+      render: (e) => (
+        <button onClick={() => { if (confirm('Supprimer cet entretien ?')) deleteMut.mutate(e.id); }}
+          className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
+      ),
+    },
+  ];
+
+  const tableFooter = filtres.length > 0 && (
+    <tr className="border-t bg-brand-50">
+      <td colSpan={4} className="px-4 py-3 text-right font-bold text-brand-700 text-sm">TOTAL</td>
+      <td className="px-4 py-3 text-right font-bold text-brand-700">{fmt.currency(totalMontant)}</td>
+      <td className="px-4 py-3 text-right font-bold text-green-700">{fmt.currency(totalAvance)}</td>
+      <td className={`px-4 py-3 text-right font-bold ${totalReste > 0 ? 'text-red-700' : 'text-green-700'}`}>{fmt.currency(totalReste)}</td>
+      <td colSpan={2} />
+    </tr>
+  );
 
   return (
     <div className="space-y-5">
@@ -115,33 +180,31 @@ export default function EntretienMaterielPage() {
             <p className="text-sm text-gray-500">{marche?.numero_marche} — {marche?.objet}</p>
           </div>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nouvel entretien
-        </button>
+        <Button onClick={() => setShowForm(!showForm)} icon={<Plus className="w-4 h-4" />}>Nouvel entretien</Button>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="card p-4">
+        <Card className="p-4">
           <p className="text-xs text-gray-500">Entretiens enregistrés</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{filtres.length}</p>
-        </div>
-        <div className="card p-4 border-l-4 border-brand-400">
+        </Card>
+        <Card className="p-4 border-l-4 border-brand-400">
           <p className="text-xs text-gray-500">Montant total</p>
           <p className="text-2xl font-bold text-brand-600 mt-1">{fmt.currency(totalMontant)}</p>
-        </div>
-        <div className="card p-4 border-l-4 border-green-400">
+        </Card>
+        <Card className="p-4 border-l-4 border-green-400">
           <p className="text-xs text-gray-500">Total avancé</p>
           <p className="text-2xl font-bold text-green-600 mt-1">{fmt.currency(totalAvance)}</p>
-        </div>
-        <div className={`card p-4 border-l-4 ${totalReste > 0 ? 'border-red-400' : 'border-green-400'}`}>
+        </Card>
+        <Card className={`p-4 border-l-4 ${totalReste > 0 ? 'border-red-400' : 'border-green-400'}`}>
           <p className="text-xs text-gray-500">Reste à régler</p>
           <p className={`text-2xl font-bold mt-1 ${totalReste > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt.currency(totalReste)}</p>
-        </div>
+        </Card>
       </div>
 
       {/* Filtre */}
-      <div className="card p-4 flex items-center gap-3">
+      <Card className="p-4 flex items-center gap-3">
         <label className="label mb-0 whitespace-nowrap">Filtrer par engin</label>
         <select className="input text-sm w-64" value={filtreEngin} onChange={e => setFiltreEngin(e.target.value)}>
           <option value="">Tous les engins</option>
@@ -150,11 +213,11 @@ export default function EntretienMaterielPage() {
         {filtreEngin && (
           <button onClick={() => setFiltreEngin('')} className="text-xs text-brand-600 hover:underline">Réinitialiser</button>
         )}
-      </div>
+      </Card>
 
       {/* Formulaire */}
       {showForm && (
-        <div className="card p-5 border-brand-200 border-2">
+        <Card className="border-brand-200 border-2">
           <h4 className="font-semibold text-sm text-gray-800 mb-3">Nouvel entretien matériel</h4>
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
             <div>
@@ -166,9 +229,7 @@ export default function EntretienMaterielPage() {
               <label className="label">Engin *</label>
               <input className="input text-sm" list="engins-entretien" placeholder="Sélectionner ou saisir..." value={form.engin}
                 onChange={e => setForm(f => ({ ...f, engin: e.target.value }))} />
-              <datalist id="engins-entretien">
-                {ENGINS_PREDEFINIS.map(e => <option key={e} value={e} />)}
-              </datalist>
+              <EnginsDatalist id="engins-entretien" />
             </div>
             <div>
               <label className="label">Type d'entretien *</label>
@@ -210,93 +271,29 @@ export default function EntretienMaterielPage() {
             </p>
           )}
           <div className="flex gap-2 mt-4">
-            <button onClick={() => {
+            <Button onClick={() => {
               if (!form.engin) { toast.error('Engin requis'); return; }
               if (form.montant <= 0) { toast.error('Montant requis'); return; }
               createMut.mutate();
-            }} disabled={createMut.isPending} className="btn-primary text-sm">
+            }} loading={createMut.isPending}>
               {createMut.isPending ? 'Enregistrement...' : 'Enregistrer'}
-            </button>
-            <button onClick={() => setShowForm(false)} className="btn-secondary text-sm">Annuler</button>
+            </Button>
+            <Button variant="secondary" onClick={() => setShowForm(false)}>Annuler</Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Tableau */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="table-header">Date</th>
-                <th className="table-header">Engin</th>
-                <th className="table-header">Entretien</th>
-                <th className="table-header">Type</th>
-                <th className="table-header text-right">Montant</th>
-                <th className="table-header text-right">Avance</th>
-                <th className="table-header text-right">Reste à régler</th>
-                <th className="table-header">Statut</th>
-                <th className="table-header"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {isLoading && <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400 text-sm animate-pulse">Chargement...</td></tr>}
-              {filtres.map(e => {
-                const reste = Number(e.reste_a_regler);
-                const st = statutOf(reste, Number(e.montant));
-                return (
-                  <tr key={e.id} className="hover:bg-gray-50">
-                    <td className="table-cell">{fmt.date(e.date_entretien)}</td>
-                    <td className="table-cell font-medium">{e.engin}</td>
-                    <td className="table-cell text-gray-600 max-w-[180px]"><p className="truncate">{e.designation || '—'}</p></td>
-                    <td className="table-cell text-xs">
-                      <span className="badge bg-blue-50 text-blue-700">{TYPES_ENTRETIEN[e.type_entretien] || e.type_entretien}</span>
-                    </td>
-                    <td className="table-cell text-right font-semibold">{fmt.currency(e.montant)}</td>
-                    <td className="table-cell text-right">
-                      {editingAvance?.id === e.id ? (
-                        <div className="flex items-center gap-1 justify-end">
-                          <NumberInput className="input text-xs py-1 w-24 text-right" max={e.montant}
-                            value={editingAvance.value} onChange={v => setEditingAvance({ id: e.id, value: v })} />
-                          <button onClick={() => updateAvanceMut.mutate({ entId: e.id, avance: editingAvance.value })}
-                            className="p-1 hover:bg-green-50 rounded"><CheckCircle2 className="w-4 h-4 text-green-500" /></button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setEditingAvance({ id: e.id, value: Number(e.avance) })}
-                          className="text-blue-600 hover:underline">{fmt.currency(e.avance)}</button>
-                      )}
-                    </td>
-                    <td className={`table-cell text-right font-bold ${reste <= 0 ? 'text-green-600' : reste < e.montant ? 'text-amber-600' : 'text-red-600'}`}>
-                      {fmt.currency(reste)}
-                    </td>
-                    <td className="table-cell">
-                      <span className={`badge ${st.color}`}>{st.label}</span>
-                    </td>
-                    <td className="table-cell">
-                      <button onClick={() => { if (confirm('Supprimer cet entretien ?')) deleteMut.mutate(e.id); }}
-                        className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!isLoading && !filtres.length && (
-                <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-400 text-sm">Aucun entretien enregistré</td></tr>
-              )}
-            </tbody>
-            {filtres.length > 0 && (
-              <tfoot className="border-t bg-brand-50">
-                <tr>
-                  <td colSpan={4} className="px-4 py-3 text-right font-bold text-brand-700 text-sm">TOTAL</td>
-                  <td className="px-4 py-3 text-right font-bold text-brand-700">{fmt.currency(totalMontant)}</td>
-                  <td className="px-4 py-3 text-right font-bold text-green-700">{fmt.currency(totalAvance)}</td>
-                  <td className={`px-4 py-3 text-right font-bold ${totalReste > 0 ? 'text-red-700' : 'text-green-700'}`}>{fmt.currency(totalReste)}</td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
+      <Card padded={false}>
+        <Table<EntretienMateriel>
+          columns={columns}
+          data={filtres}
+          rowKey={(e) => e.id}
+          loading={isLoading}
+          emptyMessage="Aucun entretien enregistré"
+          footer={tableFooter}
+        />
+      </Card>
     </div>
   );
 }

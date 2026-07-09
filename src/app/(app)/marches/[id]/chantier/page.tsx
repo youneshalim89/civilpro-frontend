@@ -7,6 +7,8 @@ import { ArrowLeft, Plus, CheckCircle, Clock, AlertTriangle, GanttChartSquare } 
 import toast from 'react-hot-toast';
 import { marchesService, articlesService, avancementPhysiqueService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import { Card, Badge, Table, Button } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
 
 type Tab = 'planning' | 'gantt';
 
@@ -107,6 +109,41 @@ export default function ChantierPage() {
   const dateFinPrevue = dateDebut ? new Date(dateDebut.getTime() + totalJoursGantt * 86400000) : null;
   const addDays = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
 
+  const phaseColumns: TableColumn<any>[] = [
+    { key: 'phase', header: 'Phase', render: (p) => <span className="font-medium">{p.phase}</span> },
+    {
+      key: 'date_prevue', header: 'Date prévue',
+      render: (p) => <span className="text-sm text-gray-500">{fmt.date(p.date_debut_prevue)} → {fmt.date(p.date_fin_prevue)}</span>,
+    },
+    {
+      key: 'date_reelle', header: 'Date réelle',
+      render: (p) => <span className="text-sm">{p.date_debut_reelle ? `${fmt.date(p.date_debut_reelle)} → ${fmt.date(p.date_fin_reelle) || '...'}` : '—'}</span>,
+    },
+    {
+      key: 'avancement', header: 'Avancement', align: 'right',
+      render: (p) => (
+        <div className="flex items-center gap-2 justify-end w-36">
+          <div className="w-20 bg-gray-200 rounded-full h-1.5">
+            <div className="bg-brand-500 h-1.5 rounded-full" style={{ width: `${p.avancement}%` }} />
+          </div>
+          <span className="text-xs w-10 text-right">{p.avancement}%</span>
+        </div>
+      ),
+    },
+    {
+      key: 'statut', header: 'Statut',
+      render: (p) => {
+        const sp = STATUT_PHASE[p.statut] || STATUT_PHASE.planifie;
+        return <Badge tone="gray" className={`${sp.color} flex items-center gap-1 w-fit`}>{sp.icon} {sp.label}</Badge>;
+      },
+    },
+    { key: 'responsable_nom', header: 'Responsable', render: (p) => <span className="text-sm text-gray-500">{p.responsable_nom || '—'}</span> },
+    {
+      key: 'actions', header: 'Actions',
+      render: (p) => <AvancementInput phase={p} onUpdate={(data) => updatePhaseMut.mutate({ phaseId: p.id, data })} />,
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-4">
@@ -137,10 +174,7 @@ export default function ChantierPage() {
         ))}
         {tab !== 'gantt' && (
           <div className="ml-auto pb-2">
-            <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Ajouter phase
-            </button>
+            <Button onClick={() => setShowForm(!showForm)} icon={<Plus className="w-4 h-4" />}>Ajouter phase</Button>
           </div>
         )}
       </div>
@@ -149,7 +183,7 @@ export default function ChantierPage() {
       {tab === 'planning' && (
         <div className="space-y-4">
           {phases.length > 0 && (
-            <div className="card p-4 space-y-4">
+            <Card className="space-y-4">
               <div>
                 <div className="flex justify-between mb-2">
                   <span className="text-sm text-gray-600">Avancement physique du marché (réf. — basé sur les prestations)</span>
@@ -175,94 +209,45 @@ export default function ChantierPage() {
                   <Link href={`/marches/${id}/avancement-physique`} className="underline font-medium ml-auto whitespace-nowrap">Mettre à jour →</Link>
                 </div>
               )}
-            </div>
+            </Card>
           )}
 
           {showForm && <PhaseForm marcheId={id} onSaved={() => { qc.invalidateQueries({ queryKey: ['planning', id] }); setShowForm(false); }} onCancel={() => setShowForm(false)} />}
 
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="table-header">Phase</th>
-                    <th className="table-header">Date prévue</th>
-                    <th className="table-header">Date réelle</th>
-                    <th className="table-header text-right">Avancement</th>
-                    <th className="table-header">Statut</th>
-                    <th className="table-header">Responsable</th>
-                    <th className="table-header">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {loadingP && Array.from({ length: 4 }).map((_, i) => (
-                    <tr key={i}>{Array.from({ length: 7 }).map((_, j) => (
-                      <td key={j} className="table-cell"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>
-                    ))}</tr>
-                  ))}
-                  {phases.map((p: any) => {
-                    const sp = STATUT_PHASE[p.statut] || STATUT_PHASE.planifie;
-                    return (
-                      <tr key={p.id} className="hover:bg-gray-50">
-                        <td className="table-cell font-medium">{p.phase}</td>
-                        <td className="table-cell text-sm text-gray-500">
-                          {fmt.date(p.date_debut_prevue)} → {fmt.date(p.date_fin_prevue)}
-                        </td>
-                        <td className="table-cell text-sm">
-                          {p.date_debut_reelle ? `${fmt.date(p.date_debut_reelle)} → ${fmt.date(p.date_fin_reelle) || '...'}` : '—'}
-                        </td>
-                        <td className="table-cell text-right w-36">
-                          <div className="flex items-center gap-2 justify-end">
-                            <div className="w-20 bg-gray-200 rounded-full h-1.5">
-                              <div className="bg-brand-500 h-1.5 rounded-full" style={{ width: `${p.avancement}%` }} />
-                            </div>
-                            <span className="text-xs w-10 text-right">{p.avancement}%</span>
-                          </div>
-                        </td>
-                        <td className="table-cell">
-                          <span className={`badge ${sp.color} flex items-center gap-1 w-fit`}>
-                            {sp.icon} {sp.label}
-                          </span>
-                        </td>
-                        <td className="table-cell text-sm text-gray-500">{p.responsable_nom || '—'}</td>
-                        <td className="table-cell">
-                          <AvancementInput phase={p} onUpdate={(data) => updatePhaseMut.mutate({ phaseId: p.id, data })} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {!loadingP && !phases.length && (
-                    <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400 text-sm">Aucune phase définie</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <Card padded={false}>
+            <Table<any>
+              columns={phaseColumns}
+              data={phases}
+              rowKey={(p) => p.id}
+              loading={loadingP}
+              emptyMessage="Aucune phase définie"
+            />
+          </Card>
         </div>
       )}
 
       {/* ── GANTT PRÉVISIONNEL ── */}
       {tab === 'gantt' && (
         <div className="space-y-4">
-          <div className="card p-4 flex flex-wrap items-center gap-4 text-sm">
+          <Card className="flex flex-wrap items-center gap-4 text-sm">
             <span className="text-gray-500">Début : <strong className="text-gray-800">{fmt.date(marche?.date_commencement)}</strong></span>
             <span className="text-gray-500">Fin prévisionnelle (rendements) : <strong className="text-gray-800">{dateFinPrevue ? fmt.date(dateFinPrevue.toISOString()) : '—'}</strong></span>
             <span className="text-gray-500">Délai contractuel : <strong className="text-gray-800">{marche?.delai_contractuel} j</strong></span>
-            <span className={`ml-auto badge ${totalJoursGantt > (marche?.delai_contractuel || Infinity) ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+            <Badge tone="gray" className={`ml-auto ${totalJoursGantt > (marche?.delai_contractuel || Infinity) ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
               {totalJoursGantt > (marche?.delai_contractuel || Infinity) ? `Dépassement de ${totalJoursGantt - (marche?.delai_contractuel || 0)} j` : 'Dans les délais'}
-            </span>
-          </div>
+            </Badge>
+          </Card>
 
-          <div className="card p-4 bg-blue-50 border-blue-200 border text-xs text-blue-700">
+          <Card className="bg-blue-50 border-blue-200 border text-xs text-blue-700">
             Planning indicatif généré automatiquement à partir de rendements estimés par type de prestation
             (terrassement ≈ 250-300 m³/j, béton ≈ 40 m³/j, revêtement ≈ 800 m²/j, aciers ≈ 500 kg/j...) et ordonnancé séquentiellement.
             La portion foncée de chaque barre reflète l'avancement réel saisi dans le module <Link href={`/marches/${id}/avancement-physique`} className="underline font-medium">Avancement Physique</Link>.
-          </div>
+          </Card>
 
           {(loadingArt) ? (
-            <div className="card p-8 text-center text-gray-400 text-sm">Chargement des prestations...</div>
+            <Card className="p-8 text-center text-gray-400 text-sm">Chargement des prestations...</Card>
           ) : (
-            <div className="card overflow-hidden">
+            <Card padded={false}>
               <div className="overflow-x-auto">
                 <div className="min-w-[900px]">
                   {/* En-tête timeline */}
@@ -303,7 +288,7 @@ export default function ChantierPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </Card>
           )}
         </div>
       )}
@@ -339,7 +324,7 @@ function PhaseForm({ marcheId, onSaved, onCancel }: { marcheId: string; onSaved:
     finally { setSaving(false); }
   };
   return (
-    <div className="card p-4 border-brand-200 border-2">
+    <Card className="p-4 border-brand-200 border-2">
       <h4 className="font-semibold text-sm text-gray-800 mb-3">Nouvelle phase</h4>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <div className="col-span-2"><label className="label">Nom de la phase *</label><input className="input text-sm" value={f.phase} onChange={e => setF(p => ({ ...p, phase: e.target.value }))} /></div>
@@ -348,10 +333,10 @@ function PhaseForm({ marcheId, onSaved, onCancel }: { marcheId: string; onSaved:
         <div className="col-span-2 xl:col-span-4"><label className="label">Description</label><input className="input text-sm" value={f.description} onChange={e => setF(p => ({ ...p, description: e.target.value }))} /></div>
       </div>
       <div className="flex gap-2 mt-3">
-        <button onClick={save} disabled={saving} className="btn-primary text-sm">{saving ? 'Ajout...' : 'Ajouter'}</button>
-        <button onClick={onCancel} className="btn-secondary text-sm">Annuler</button>
+        <Button onClick={save} loading={saving} size="sm">{saving ? 'Ajout...' : 'Ajouter'}</Button>
+        <Button variant="secondary" size="sm" onClick={onCancel}>Annuler</Button>
       </div>
-    </div>
+    </Card>
   );
 }
 

@@ -9,6 +9,8 @@ import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { articlesService, marchesService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
+import { Card, Table, Button, Modal } from '@/components/ui';
+import type { TableColumn } from '@/components/ui/Table';
 import NumberInput from '@/components/NumberInput';
 import type { ArticleMarche } from '@/lib/api';
 
@@ -149,6 +151,41 @@ export default function ArticlesPage() {
     }
   };
 
+  const articleColumns: TableColumn<ArticleMarche>[] = [
+    { key: 'index', header: '#', render: (a) => <span className="text-gray-400 text-xs">{articles.indexOf(a) + 1}</span> },
+    { key: 'code_article', header: 'Code', render: (a) => <span className="font-mono text-xs text-brand-600">{a.code_article}</span> },
+    { key: 'designation', header: 'Désignation', render: (a) => <p className="truncate max-w-xs">{a.designation}</p> },
+    { key: 'unite', header: 'Unité', align: 'right', render: (a) => <span className="text-gray-500">{a.unite}</span> },
+    { key: 'quantite_prevue', header: 'Qté Prévue', align: 'right', render: (a) => fmt.number(a.quantite_prevue) },
+    { key: 'prix_unitaire', header: 'Prix Unitaire', align: 'right', render: (a) => fmt.currency(a.prix_unitaire, '') },
+    { key: 'montant', header: 'Montant', align: 'right', render: (a) => <span className="font-medium">{fmt.currency(a.montant, '')}</span> },
+    {
+      key: 'quantite_executee_totale', header: 'Qté Exécutée', align: 'right',
+      render: (a) => <span className="text-blue-600">{a.quantite_executee_totale ? fmt.number(a.quantite_executee_totale) : '—'}</span>,
+    },
+    {
+      key: 'actions', header: 'Actions',
+      render: (a) => (
+        <div className="flex gap-1">
+          <button onClick={() => { setEditing(a); setShowForm(true); }} className="p-1 hover:bg-gray-100 rounded transition-colors">
+            <Edit2 className="w-3.5 h-3.5 text-gray-400" />
+          </button>
+          <button onClick={() => { if (confirm('Supprimer cet article ?')) deleteMut.mutate(a.id); }} className="p-1 hover:bg-red-50 rounded transition-colors">
+            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const articlesFooter = totaux && (
+    <tr>
+      <td colSpan={6} className="px-4 py-3 text-sm font-bold text-right text-gray-700">TOTAL GÉNÉRAL</td>
+      <td className="px-4 py-3 text-right font-bold text-brand-700">{fmt.currency(totaux.montant_total, '')}</td>
+      <td colSpan={2} />
+    </tr>
+  );
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-4">
@@ -161,20 +198,14 @@ export default function ArticlesPage() {
         </div>
         <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
-        <button onClick={() => fileInputRef.current?.click()} className="btn-secondary text-sm flex items-center gap-2">
-          <Upload className="w-4 h-4" /> Importer Excel/CSV
-        </button>
-        <button onClick={exportCSV} className="btn-secondary text-sm flex items-center gap-2">
-          <Download className="w-4 h-4" /> Exporter CSV
-        </button>
-        <button onClick={() => { setEditing(null); setShowForm(true); }} className="btn-primary text-sm flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Ajouter article
-        </button>
+        <Button variant="secondary" onClick={() => fileInputRef.current?.click()} icon={<Upload className="w-4 h-4" />}>Importer Excel/CSV</Button>
+        <Button variant="secondary" onClick={exportCSV} icon={<Download className="w-4 h-4" />}>Exporter CSV</Button>
+        <Button onClick={() => { setEditing(null); setShowForm(true); }} icon={<Plus className="w-4 h-4" />}>Ajouter article</Button>
       </div>
 
       {/* Diagnostic import (si aucune ligne valide) */}
       {importDebug && (
-        <div className="card p-5 border-red-200 border-2">
+        <Card className="border-red-200 border-2">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-red-700">Diagnostic de l'import — aucune ligne valide trouvée</h3>
             <button onClick={() => setImportDebug(null)} className="p-1.5 hover:bg-gray-100 rounded-lg">
@@ -208,20 +239,14 @@ export default function ArticlesPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Modal prévisualisation import */}
-      {importRows && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
-            <div className="px-6 py-4 border-b flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Aperçu de l'import — {importRows.length} ligne(s)</h3>
-              <button onClick={() => setImportRows(null)} className="p-1.5 hover:bg-gray-100 rounded-lg">
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1 p-0">
+      <Modal open={!!importRows} onClose={() => setImportRows(null)} maxWidth="2xl"
+        title={importRows ? `Aperçu de l'import — ${importRows.length} ligne(s)` : ''}>
+        <div className="-m-6">
+            <div className="overflow-y-auto max-h-[60vh]">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b sticky top-0">
                   <tr>
@@ -234,7 +259,7 @@ export default function ArticlesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {importRows.map((r, i) => (
+                  {(importRows || []).map((r, i) => (
                     <tr key={i}>
                       <td className="table-cell font-mono text-xs">{r.code_article}</td>
                       <td className="table-cell">{r.designation}</td>
@@ -248,30 +273,29 @@ export default function ArticlesPage() {
               </table>
             </div>
             <div className="px-6 py-4 border-t flex justify-end gap-3">
-              <button onClick={() => setImportRows(null)} className="btn-secondary text-sm">Annuler</button>
-              <button onClick={confirmImport} disabled={importing} className="btn-primary text-sm flex items-center gap-2">
-                <CheckCircle className="w-4 h-4" /> {importing ? 'Import en cours...' : `Importer ${importRows.length} lignes`}
-              </button>
+              <Button variant="secondary" onClick={() => setImportRows(null)}>Annuler</Button>
+              <Button onClick={confirmImport} loading={importing} icon={<CheckCircle className="w-4 h-4" />}>
+                {importing ? 'Import en cours...' : `Importer ${importRows?.length || 0} lignes`}
+              </Button>
             </div>
-          </div>
         </div>
-      )}
+      </Modal>
 
       {/* Totaux */}
       {totaux && (
         <div className="grid grid-cols-3 gap-4">
-          <div className="card p-4 text-center">
+          <Card className="p-4 text-center">
             <p className="text-xs text-gray-500">Nombre d'articles</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{totaux.nb_articles}</p>
-          </div>
-          <div className="card p-4 text-center">
+          </Card>
+          <Card className="p-4 text-center">
             <p className="text-xs text-gray-500">Montant BQ Total</p>
             <p className="text-xl font-bold text-brand-600 mt-1">{fmt.currency(totaux.montant_total)}</p>
-          </div>
-          <div className="card p-4 text-center">
+          </Card>
+          <Card className="p-4 text-center">
             <p className="text-xs text-gray-500">Montant marché initial</p>
             <p className="text-xl font-bold text-gray-900 mt-1">{fmt.currency(marchesRes?.montant_initial)}</p>
-          </div>
+          </Card>
         </div>
       )}
 
@@ -286,73 +310,17 @@ export default function ArticlesPage() {
       )}
 
       {/* Tableau BQ */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="table-header w-8">#</th>
-                <th className="table-header">Code</th>
-                <th className="table-header">Désignation</th>
-                <th className="table-header text-right">Unité</th>
-                <th className="table-header text-right">Qté Prévue</th>
-                <th className="table-header text-right">Prix Unitaire</th>
-                <th className="table-header text-right">Montant</th>
-                <th className="table-header text-right">Qté Exécutée</th>
-                <th className="table-header">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {isLoading && Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i}>{Array.from({ length: 9 }).map((_, j) => (
-                  <td key={j} className="table-cell"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>
-                ))}</tr>
-              ))}
-              {articles.map((a, i) => (
-                <tr key={a.id} className={`hover:bg-gray-50 ${a.is_sous_total ? 'bg-gray-50 font-semibold' : ''}`}>
-                  <td className="table-cell text-gray-400 text-xs">{i + 1}</td>
-                  <td className="table-cell font-mono text-xs text-brand-600">{a.code_article}</td>
-                  <td className="table-cell max-w-xs">
-                    <p className="truncate">{a.designation}</p>
-                  </td>
-                  <td className="table-cell text-right text-gray-500">{a.unite}</td>
-                  <td className="table-cell text-right">{fmt.number(a.quantite_prevue)}</td>
-                  <td className="table-cell text-right">{fmt.currency(a.prix_unitaire, '')}</td>
-                  <td className="table-cell text-right font-medium">{fmt.currency(a.montant, '')}</td>
-                  <td className="table-cell text-right text-blue-600">
-                    {a.quantite_executee_totale ? fmt.number(a.quantite_executee_totale) : '—'}
-                  </td>
-                  <td className="table-cell">
-                    <div className="flex gap-1">
-                      <button onClick={() => { setEditing(a); setShowForm(true); }}
-                        className="p-1 hover:bg-gray-100 rounded transition-colors">
-                        <Edit2 className="w-3.5 h-3.5 text-gray-400" />
-                      </button>
-                      <button onClick={() => { if (confirm('Supprimer cet article ?')) deleteMut.mutate(a.id); }}
-                        className="p-1 hover:bg-red-50 rounded transition-colors">
-                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            {totaux && (
-              <tfoot className="border-t bg-brand-50">
-                <tr>
-                  <td colSpan={6} className="px-4 py-3 text-sm font-bold text-right text-gray-700">
-                    TOTAL GÉNÉRAL
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold text-brand-700">
-                    {fmt.currency(totaux.montant_total, '')}
-                  </td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
+      <Card padded={false}>
+        <Table<ArticleMarche>
+          columns={articleColumns}
+          data={articles}
+          rowKey={(a) => a.id}
+          loading={isLoading}
+          emptyMessage="Aucun article"
+          rowClassName={(a) => a.is_sous_total ? 'bg-gray-50 font-semibold' : undefined}
+          footer={articlesFooter}
+        />
+      </Card>
     </div>
   );
 }
@@ -398,7 +366,7 @@ function ArticleForm({ marcheId, initial, onClose, onSaved }: {
   };
 
   return (
-    <div className="card p-5 border-brand-200 border-2">
+    <Card className="border-brand-200 border-2">
       <h3 className="font-semibold text-gray-800 mb-4">{initial ? 'Modifier article' : 'Nouvel article'}</h3>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <div>
@@ -439,11 +407,11 @@ function ArticleForm({ marcheId, initial, onClose, onSaved }: {
         </div>
       </div>
       <div className="flex gap-3 mt-4">
-        <button onClick={handleSave} disabled={saving} className="btn-primary text-sm">
+        <Button onClick={handleSave} loading={saving}>
           {saving ? 'Enregistrement...' : initial ? 'Mettre à jour' : 'Ajouter'}
-        </button>
-        <button onClick={onClose} className="btn-secondary text-sm">Annuler</button>
+        </Button>
+        <Button variant="secondary" onClick={onClose}>Annuler</Button>
       </div>
-    </div>
+    </Card>
   );
 }
