@@ -68,6 +68,8 @@ export default function NotificationsPage() {
 
   const notifs: Notif[] = data || [];
   const nonLues = notifs.filter(n => !n.lue).length;
+  const alertesCount = notifs.filter(n => n.type === 'alerte').length;
+  const financiersCount = notifs.filter(n => n.type === 'financier').length;
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -91,6 +93,21 @@ export default function NotificationsPage() {
             <CheckCheck className="w-4 h-4" /> Tout marquer comme lu
           </button>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="card p-4">
+          <p className="text-sm font-medium text-gray-700">Non lues</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">{nonLues}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-sm font-medium text-gray-700">Alertes</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">{alertesCount}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-sm font-medium text-gray-700">Financières</p>
+          <p className="mt-2 text-2xl font-semibold text-gray-900">{financiersCount}</p>
+        </div>
       </div>
 
       {/* Filtres */}
