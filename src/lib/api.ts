@@ -263,9 +263,13 @@ export interface JournalMateriel {
   marche_id: string;
   date_jour: string;
   engin: string;
+  engin_id?: string | null;
   heures_travaillees: number;
   gasoil_consomme: number;
   taux_horaire: number;
+  compteur_horaire?: number | null;
+  prix_unitaire?: number | null;
+  montant?: number | null;
   statut: 'operationnel' | 'panne' | 'entretien' | 'arret';
   observation?: string;
   created_by_nom?: string;

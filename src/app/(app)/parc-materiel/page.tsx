@@ -30,7 +30,8 @@ type Maintenance = {
 };
 
 type Projet = { id: string; nom: string; code_projet: string };
-type Materiau = { id: string; designation: string; quantite_stock: number; quantite_min: number; unite_mesure: string; statut: string };
+type Materiau = { id: string; designation: string; quantite_stock: number; quantite_min: number; unite_mesure: string; statut: string; prix_unitaire_ht: number };
+type CarburantMois = { mois: string; litres: number; montant: number; heures: number; l_par_h: number | null; anomalie_pct: number | null };
 
 const STATUT_ENGIN_COLOR: Record<string, string> = {
   disponible:  'bg-green-100 text-green-700',
@@ -69,6 +70,7 @@ export default function ParcMaterielPage() {
   const [maintForm, setMaintForm] = useState(emptyMaintenanceForm);
   const [historiqueEngin, setHistoriqueEngin] = useState<Engin | null>(null);
   const [cloture, setCloture] = useState<{ maintenance: Maintenance; coutReel: number } | null>(null);
+  const [carburantEngin, setCarburantEngin] = useState<Engin | null>(null);
 
   const { data: enginsData, isLoading } = useQuery({
     queryKey: ['parc-engins', projetFiltre],
@@ -91,10 +93,17 @@ export default function ParcMaterielPage() {
     enabled: !!historiqueEngin,
   });
 
+  const { data: carburantData, isLoading: loadingCarburant } = useQuery({
+    queryKey: ['parc-carburant', carburantEngin?.id],
+    queryFn: () => apiFetch(`/stock/engins/${carburantEngin!.id}/carburant`).then(r => r.data || []),
+    enabled: !!carburantEngin,
+  });
+
   const engins: Engin[] = enginsData || [];
   const projets: Projet[] = projetsData || [];
   const gasoil: Materiau | undefined = (materiauxData || [])[0];
   const maintenances: Maintenance[] = maintenancesEngin || [];
+  const carburantMois: CarburantMois[] = carburantData || [];
 
   const types = Array.from(new Set(engins.map(e => e.categorie_nom).filter(Boolean))) as string[];
 
@@ -213,6 +222,8 @@ export default function ParcMaterielPage() {
           onClick={() => { setMaintenanceEngin(e); setMaintForm(emptyMaintenanceForm); }}>Entretien</Button>
         <Button size="sm" variant="ghost" icon={<History className="w-3.5 h-3.5" />}
           onClick={() => setHistoriqueEngin(e)}>Historique</Button>
+        <Button size="sm" variant="ghost" icon={<Fuel className="w-3.5 h-3.5" />}
+          onClick={() => setCarburantEngin(e)}>Carburant</Button>
       </div>
     ) },
   ];
@@ -232,6 +243,17 @@ export default function ParcMaterielPage() {
       <Button size="sm" onClick={() => setCloture({ maintenance: m, coutReel: m.cout_prevu || 0 })}>Clôturer</Button>
     ) : <span className="text-xs text-gray-400">{fmt.date(m.date_realisee)}</span>,
     },
+  ];
+
+  const carburantColumns: TableColumn<CarburantMois>[] = [
+    { key: 'mois', header: 'Mois', render: c => <span className="font-medium">{c.mois}</span> },
+    { key: 'litres', header: 'Litres', align: 'right', render: c => `${fmt.number(c.litres)} L` },
+    { key: 'montant', header: 'Coût', align: 'right', render: c => fmt.currency(c.montant) },
+    { key: 'heures', header: 'Heures', align: 'right', render: c => c.heures ? `${fmt.number(c.heures)} h` : '—' },
+    { key: 'l_par_h', header: 'L/h', align: 'right', render: c => c.l_par_h !== null ? fmt.number(c.l_par_h) : '—' },
+    { key: 'anomalie', header: 'Anomalie', render: c => c.anomalie_pct !== null ? (
+      <Badge tone="danger">L/h {c.anomalie_pct > 0 ? '+' : ''}{c.anomalie_pct}% vs mois dernier</Badge>
+    ) : <span className="text-gray-300 text-xs">—</span> },
   ];
 
   return (
@@ -396,6 +418,16 @@ export default function ParcMaterielPage() {
           <EmptyState icon={Wrench} title="Aucune maintenance enregistrée" />
         ) : (
           <Table<Maintenance> columns={maintenanceColumns} data={maintenances} rowKey={m => m.id} emptyMessage="Aucune maintenance" />
+        )}
+      </Modal>
+
+      {/* Modal Carburant par engin (tous marchés confondus) */}
+      <Modal open={!!carburantEngin} onClose={() => setCarburantEngin(null)} maxWidth="2xl"
+        title={carburantEngin ? `Carburant — ${carburantEngin.designation}` : ''}>
+        {loadingCarburant ? <Loading label="Chargement..." /> : carburantMois.length === 0 ? (
+          <EmptyState icon={Fuel} title="Aucun plein enregistré" description="Saisir un plein depuis le Journal Matériel d'un marché." />
+        ) : (
+          <Table<CarburantMois> columns={carburantColumns} data={carburantMois} rowKey={c => c.mois} emptyMessage="Aucune donnée" />
         )}
       </Modal>
 
