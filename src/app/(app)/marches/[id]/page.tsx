@@ -1,35 +1,64 @@
 'use client';
 // src/app/(app)/marches/[id]/page.tsx — Détail d'un marché (Chantier UI-2 : en-tête riche + onglets)
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Edit2, FileText, AlertCircle, FileDown, Trash2,
   HardHat, Truck, ChevronDown, Wrench, Activity, ClipboardCheck,
+  Plus, Pencil, Check, X, Wallet, Scale, TrendingUp, TrendingDown, Users,
 } from 'lucide-react';
-import { marchesService, chargesService, chargesJournalieresService } from '@/lib/api';
+import toast from 'react-hot-toast';
+import { marchesService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
 import { exportMarchePDF } from '@/lib/pdf';
 import { useAuthStore } from '@/lib/store';
 import { MarcheStatutBadge } from '@/components/marches/MarcheStatutBadge';
 import { SupprimerMarcheModal } from '@/components/marches/SupprimerMarcheModal';
-import { Card, StatCard, Button, Loading, EmptyState, Tabs } from '@/components/ui';
+import { Card, CardHeader, StatCard, Badge, Button, Modal, Loading, EmptyState, Tabs } from '@/components/ui';
 import type { TabItem } from '@/components/ui/Tabs';
-import type { ChargeMensuelle } from '@/lib/api';
+import NumberInput from '@/components/NumberInput';
 
-const CHAMPS_CHARGE: (keyof ChargeMensuelle)[] = [
-  'masse_salariale', 'carburant', 'hebergement', 'restauration',
-  'reparations', 'pneumatiques', 'transport', 'sous_traitance', 'divers',
-];
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
+const apiFetch = (url: string, opts?: RequestInit) =>
+  fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then((r) => r.json());
+
+// ── Budget / Dépenses / Trésorerie (Chantier Fusion-1) ──────────
+// Réutilise Finance-E/F tels quels (mêmes routes que /projets/[id]) : ces
+// données sont scope PROJET (marche.projet_id), donc partagées entre tous
+// les marchés d'un même projet — voir le garde-fou "Données communes".
+type Budget = { id: string; projet_id: string; categorie: string; montant_prevu: number; reel_depense: number };
+type Depense = {
+  id: string; projet_id: string; categorie: string; description?: string;
+  montant_ht: number; tva_pct: number; montant_ttc: number; date_depense: string;
+  statut_validation: 'en_attente' | 'validee' | 'rejetee'; validee_par_nom?: string;
+};
+type MarcheLie = { id: string; numero_marche: string };
+type TresorerieMarche = { id: string; numero_marche: string; objet: string; encaissement: number; decaissement: number; solde: number };
+type Tresorerie = { marches: TresorerieMarche[] };
+
+const VALIDATEURS = ['admin', 'directeur', 'comptable'];
+const STATUT_DEPENSE: Record<string, { label: string; color: string }> = {
+  en_attente: { label: 'En attente', color: 'bg-yellow-100 text-yellow-700' },
+  validee:    { label: 'Validée',    color: 'bg-green-100 text-green-700' },
+  rejetee:    { label: 'Rejetée',    color: 'bg-red-100 text-red-700' },
+};
+const emptyBudgetForm = { id: '', categorie: '', montant_prevu: 0 };
+const emptyDepenseForm = { id: '', categorie: '', description: '', montant_ht: 0, tva_pct: 20, date_depense: new Date().toISOString().split('T')[0] };
 
 export default function MarcheDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const qc = useQueryClient();
   const { user } = useAuthStore();
+  const peutValider = VALIDATEURS.includes(user?.role || '');
   const [showInfos, setShowInfos] = useState(false);
   const [showIndicateurs, setShowIndicateurs] = useState(false);
   const [aSupprimer, setASupprimer] = useState<{ id: string; numero_marche: string } | null>(null);
+  const [budgetForm, setBudgetForm] = useState<typeof emptyBudgetForm | null>(null);
+  const [depenseForm, setDepenseForm] = useState<typeof emptyDepenseForm | null>(null);
 
   const { data: marche, isLoading } = useQuery({
     queryKey: ['marche', id],
@@ -37,25 +66,98 @@ export default function MarcheDetailPage() {
     enabled:  !!id,
   });
 
-  const { data: chargesMensuelles } = useQuery({
-    queryKey: ['charges', id],
-    queryFn:  () => chargesService.list(id).then(r => r.data.data),
-    enabled:  !!id,
+  const projetId = marche?.projet_id || null;
+
+  const { data: budgets } = useQuery({
+    queryKey: ['finance-budgets-marche', projetId],
+    queryFn: () => apiFetch(`/finance/budgets?projet_id=${projetId}`).then(r => r.data || []),
+    enabled: !!projetId,
   });
 
-  const { data: chargesJourTous } = useQuery({
-    queryKey: ['charges-jour-all', id],
-    queryFn:  () => chargesJournalieresService.list(id).then(r => r.data.data),
-    enabled:  !!id,
+  const { data: depenses } = useQuery({
+    queryKey: ['finance-depenses-marche', projetId],
+    queryFn: () => apiFetch(`/finance/depenses?projet_id=${projetId}`).then(r => r.data || []),
+    enabled: !!projetId,
+  });
+
+  const { data: tresorerie } = useQuery<Tresorerie | undefined>({
+    queryKey: ['tresorerie-marche', projetId],
+    queryFn: () => apiFetch(`/projets/${projetId}/tresorerie`).then(r => r.data),
+    enabled: !!projetId,
+  });
+
+  const { data: marchesLies } = useQuery<MarcheLie[]>({
+    queryKey: ['marches-lies', projetId],
+    queryFn: () => apiFetch(`/projets/${projetId}/marches`).then(r => r.data || []),
+    enabled: !!projetId,
+  });
+
+  const invalidateFinance = () => {
+    qc.invalidateQueries({ queryKey: ['finance-budgets-marche', projetId] });
+    qc.invalidateQueries({ queryKey: ['finance-depenses-marche', projetId] });
+    qc.invalidateQueries({ queryKey: ['tresorerie-marche', projetId] });
+  };
+
+  const saveBudgetMut = useMutation({
+    mutationFn: () => {
+      const payload = { projet_id: projetId, categorie: budgetForm!.categorie, montant_prevu: budgetForm!.montant_prevu };
+      return budgetForm!.id
+        ? apiFetch(`/finance/budgets/${budgetForm!.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        : apiFetch('/finance/budgets', { method: 'POST', body: JSON.stringify(payload) });
+    },
+    onSuccess: (r) => {
+      if (!r.success) throw new Error(r.message);
+      invalidateFinance();
+      toast.success(budgetForm!.id ? 'Budget modifié' : 'Ligne de budget créée');
+      setBudgetForm(null);
+    },
+    onError: () => toast.error('Erreur lors de l\'enregistrement du budget'),
+  });
+
+  const deleteBudgetMut = useMutation({
+    mutationFn: (budgetId: string) => apiFetch(`/finance/budgets/${budgetId}`, { method: 'DELETE' }),
+    onSuccess: () => { invalidateFinance(); toast.success('Ligne de budget supprimée'); },
+  });
+
+  const saveDepenseMut = useMutation({
+    mutationFn: () => {
+      const payload = {
+        projet_id: projetId, categorie: depenseForm!.categorie, description: depenseForm!.description || undefined,
+        montant_ht: depenseForm!.montant_ht, tva_pct: depenseForm!.tva_pct, date_depense: depenseForm!.date_depense,
+      };
+      return depenseForm!.id
+        ? apiFetch(`/finance/depenses/${depenseForm!.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        : apiFetch('/finance/depenses', { method: 'POST', body: JSON.stringify(payload) });
+    },
+    onSuccess: (r) => {
+      if (!r.success) throw new Error(r.message);
+      invalidateFinance();
+      toast.success(depenseForm!.id ? 'Dépense modifiée' : 'Dépense créée');
+      setDepenseForm(null);
+    },
+    onError: () => toast.error('Erreur lors de l\'enregistrement de la dépense'),
+  });
+
+  const deleteDepenseMut = useMutation({
+    mutationFn: (depenseId: string) => apiFetch(`/finance/depenses/${depenseId}`, { method: 'DELETE' }),
+    onSuccess: () => { invalidateFinance(); toast.success('Dépense supprimée'); },
+  });
+
+  const validerDepenseMut = useMutation({
+    mutationFn: (vars: { depenseId: string; decision: 'validee' | 'rejetee' }) =>
+      apiFetch(`/finance/depenses/${vars.depenseId}/valider`, { method: 'PATCH', body: JSON.stringify({ decision: vars.decision }) }),
+    onSuccess: (_r, vars) => {
+      invalidateFinance();
+      toast.success(vars.decision === 'validee' ? 'Dépense validée' : 'Dépense rejetée');
+    },
   });
 
   if (isLoading) return <Loading label="Chargement du marché..." />;
   if (!marche) return <EmptyState icon={FileText} title="Marché introuvable" />;
 
-  const totalChargesFixes = (chargesMensuelles || []).reduce(
-    (s, c) => s + CHAMPS_CHARGE.reduce((s2, k) => s2 + (Number(c[k]) || 0), 0), 0);
-  const totalChargesJour  = (chargesJourTous || []).reduce((s, c) => s + (Number(c.montant) || 0), 0);
-  const montantSortie = totalChargesFixes + totalChargesJour;
+  const autresMarchesLies = (marchesLies || []).filter((m) => m.id !== id);
+  const tresorerieMarche = tresorerie?.marches?.find((m) => m.id === id);
+
   // montant_actualise revient en NUMERIC PostgreSQL sérialisé en chaîne ("0.00" par
   // exemple) : une chaîne non vide est toujours "truthy" en JS, donc un `||` classique
   // ne retombe jamais sur montant_initial même quand l'actualisation vaut 0 (non définie
@@ -193,12 +295,121 @@ export default function MarcheDetailPage() {
           </Card>
         </div>
 
-        {/* Synthèse Sortie (charges), pour mémoire — Entrée est désormais "Payé" dans l'en-tête */}
-        <Card>
-          <h3 className="font-semibold text-gray-800 mb-1">Charges (sorties)</h3>
-          <p className="text-xs text-gray-400 mb-3">Charges fixes mensuelles + charges journalières</p>
-          <p className="text-2xl font-bold text-red-600">{fmt.currency(montantSortie)}</p>
-        </Card>
+        {/* Trésorerie (Chantier Fusion-1 — TresorerieService, même source que /projets/[id]) */}
+        {projetId && (
+          <Card padded={false}>
+            <CardHeader title="Trésorerie" />
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatCard label="Encaissement" tone="green" icon={TrendingUp} value={fmt.currency(tresorerieMarche?.encaissement ?? 0)} />
+              <StatCard label="Décaissement (charges)" tone="red" icon={TrendingDown} value={fmt.currency(tresorerieMarche?.decaissement ?? 0)} />
+              <StatCard label="Solde" tone={(tresorerieMarche?.solde ?? 0) >= 0 ? 'blue' : 'orange'} icon={Scale} value={fmt.currency(tresorerieMarche?.solde ?? 0)} />
+            </div>
+          </Card>
+        )}
+
+        {/* Budget par catégorie + Dépenses (Chantier Fusion-1 — Finance-E, scope projet) */}
+        {projetId && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Bandeau "données communes" si le projet a d'autres marchés */}
+            {autresMarchesLies.length > 0 && (
+              <div className="xl:col-span-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-blue-700 flex items-center gap-2">
+                <Users className="w-4 h-4 flex-shrink-0" />
+                Budget et dépenses communs avec {autresMarchesLies.length > 1 ? 'les marchés' : 'le marché'}{' '}
+                {autresMarchesLies.map((m, i) => (
+                  <span key={m.id}>
+                    {i > 0 && ', '}
+                    <Link href={`/marches/${m.id}`} className="font-medium underline hover:text-blue-900">{m.numero_marche}</Link>
+                  </span>
+                ))}
+                {' '}— même projet, ces chiffres ne sont pas propres à ce marché.
+              </div>
+            )}
+
+            {/* Budget */}
+            <Card padded={false}>
+              <CardHeader title="Budget par catégorie" action={
+                <Button size="sm" variant="secondary" icon={<Plus className="w-3.5 h-3.5" />}
+                  onClick={() => setBudgetForm(emptyBudgetForm)}>Ajouter</Button>
+              } />
+              <div className="divide-y">
+                {!budgets?.length && <p className="px-5 py-8 text-center text-sm text-gray-400">Aucun budget renseigné</p>}
+                {budgets?.map((b: Budget) => {
+                  const pct = Number(b.montant_prevu) > 0 ? Math.min(100, (Number(b.reel_depense) / Number(b.montant_prevu)) * 100) : 0;
+                  const over = Number(b.reel_depense) > Number(b.montant_prevu);
+                  return (
+                    <div key={b.id} className="px-5 py-3 group">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm text-gray-700">{b.categorie}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">
+                            {fmt.currency(b.reel_depense)} <span className="text-gray-400 font-normal">/ {fmt.currency(b.montant_prevu)}</span>
+                          </span>
+                          <button onClick={() => setBudgetForm({ id: b.id, categorie: b.categorie, montant_prevu: Number(b.montant_prevu) })}
+                            className="p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100"><Pencil className="w-3.5 h-3.5 text-gray-400" /></button>
+                          <button onClick={() => { if (confirm('Supprimer cette ligne de budget ?')) deleteBudgetMut.mutate(b.id); }}
+                            className="p-1 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+                        </div>
+                      </div>
+                      <div className="bg-gray-100 rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full ${over ? 'bg-red-500' : 'bg-brand-500'}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* Dépenses */}
+            <Card padded={false}>
+              <CardHeader title="Dépenses" action={
+                <Button size="sm" variant="secondary" icon={<Plus className="w-3.5 h-3.5" />}
+                  onClick={() => setDepenseForm(emptyDepenseForm)}>Nouvelle dépense</Button>
+              } />
+              <div className="divide-y">
+                {!depenses?.length && <p className="px-5 py-8 text-center text-sm text-gray-400">Aucune dépense enregistrée</p>}
+                {depenses?.map((d: Depense) => {
+                  const s = STATUT_DEPENSE[d.statut_validation] || STATUT_DEPENSE.en_attente;
+                  const modifiable = d.statut_validation === 'en_attente';
+                  return (
+                    <div key={d.id} className="px-5 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{d.categorie}</p>
+                          <p className="text-xs text-gray-400">{fmt.date(d.date_depense)}{d.description ? ` · ${d.description}` : ''}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-sm font-medium text-gray-900">{fmt.currency(d.montant_ht)}</span>
+                          <Badge tone="gray" className={s.color}>{s.label}</Badge>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-2">
+                        {peutValider && d.statut_validation === 'en_attente' && (
+                          <>
+                            <Button size="sm" icon={<Check className="w-3.5 h-3.5" />}
+                              onClick={() => validerDepenseMut.mutate({ depenseId: d.id, decision: 'validee' })}>Valider</Button>
+                            <Button size="sm" variant="secondary" icon={<X className="w-3.5 h-3.5" />}
+                              onClick={() => validerDepenseMut.mutate({ depenseId: d.id, decision: 'rejetee' })}>Rejeter</Button>
+                          </>
+                        )}
+                        {modifiable && (
+                          <>
+                            <button onClick={() => setDepenseForm({
+                              id: d.id, categorie: d.categorie, description: d.description || '',
+                              montant_ht: Number(d.montant_ht), tva_pct: Number(d.tva_pct) || 20,
+                              date_depense: d.date_depense.slice(0, 10),
+                            })} className="p-1.5 hover:bg-gray-100 rounded-lg"><Pencil className="w-3.5 h-3.5 text-gray-400" /></button>
+                            <button onClick={() => { if (confirm('Supprimer cette dépense ?')) deleteDepenseMut.mutate(d.id); }}
+                              className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Modules complémentaires */}
         <div>
@@ -222,6 +433,73 @@ export default function MarcheDetailPage() {
         onClose={() => setASupprimer(null)}
         onDeleted={() => router.push('/marches')}
       />
+
+      {/* Modal Budget (création/édition) */}
+      <Modal open={!!budgetForm} onClose={() => setBudgetForm(null)} title={budgetForm?.id ? 'Modifier la ligne de budget' : 'Nouvelle ligne de budget'}>
+        <div className="space-y-4">
+          <div>
+            <label className="label">Catégorie *</label>
+            <input className="input" value={budgetForm?.categorie || ''}
+              onChange={e => setBudgetForm(f => f ? { ...f, categorie: e.target.value } : f)}
+              placeholder="Terrassement, Main d'œuvre, Matériel/Engins..." />
+          </div>
+          <div>
+            <label className="label">Montant prévu (MAD) *</label>
+            <NumberInput min={0} className="input" value={budgetForm?.montant_prevu || 0}
+              onChange={v => setBudgetForm(f => f ? { ...f, montant_prevu: v } : f)} autoFocus />
+          </div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <Button onClick={() => {
+            if (!budgetForm?.categorie.trim()) { toast.error('Catégorie requise'); return; }
+            saveBudgetMut.mutate();
+          }} loading={saveBudgetMut.isPending}>{budgetForm?.id ? 'Modifier' : 'Créer'}</Button>
+          <Button variant="secondary" onClick={() => setBudgetForm(null)}>Annuler</Button>
+        </div>
+      </Modal>
+
+      {/* Modal Dépense (création/édition) */}
+      <Modal open={!!depenseForm} onClose={() => setDepenseForm(null)} title={depenseForm?.id ? 'Modifier la dépense' : 'Nouvelle dépense'}>
+        <div className="space-y-4">
+          <div>
+            <label className="label">Catégorie *</label>
+            <input className="input" value={depenseForm?.categorie || ''}
+              onChange={e => setDepenseForm(f => f ? { ...f, categorie: e.target.value } : f)}
+              placeholder="Idem catégorie budget pour le lien réel/prévu" list="categories-budget-marche" />
+            <datalist id="categories-budget-marche">
+              {budgets?.map((b: Budget) => <option key={b.id} value={b.categorie} />)}
+            </datalist>
+          </div>
+          <div>
+            <label className="label">Date *</label>
+            <input type="date" className="input" value={depenseForm?.date_depense || ''}
+              onChange={e => setDepenseForm(f => f ? { ...f, date_depense: e.target.value } : f)} />
+          </div>
+          <div>
+            <label className="label">Montant HT (MAD) *</label>
+            <NumberInput min={0} className="input" value={depenseForm?.montant_ht || 0}
+              onChange={v => setDepenseForm(f => f ? { ...f, montant_ht: v } : f)} />
+          </div>
+          <div>
+            <label className="label">TVA (%)</label>
+            <NumberInput min={0} className="input" value={depenseForm?.tva_pct ?? 20}
+              onChange={v => setDepenseForm(f => f ? { ...f, tva_pct: v } : f)} />
+          </div>
+          <div>
+            <label className="label">Description</label>
+            <input className="input" value={depenseForm?.description || ''}
+              onChange={e => setDepenseForm(f => f ? { ...f, description: e.target.value } : f)} />
+          </div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <Button onClick={() => {
+            if (!depenseForm?.categorie.trim()) { toast.error('Catégorie requise'); return; }
+            if (!depenseForm.montant_ht || depenseForm.montant_ht <= 0) { toast.error('Montant requis'); return; }
+            saveDepenseMut.mutate();
+          }} loading={saveDepenseMut.isPending}>{depenseForm?.id ? 'Modifier' : 'Créer'}</Button>
+          <Button variant="secondary" onClick={() => setDepenseForm(null)}>Annuler</Button>
+        </div>
+      </Modal>
     </div>
   );
 }
