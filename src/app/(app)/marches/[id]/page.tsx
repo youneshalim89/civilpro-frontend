@@ -8,6 +8,7 @@ import {
   ArrowLeft, Edit2, FileText, AlertCircle, FileDown, Trash2,
   HardHat, Truck, ChevronDown, Wrench, Activity, ClipboardCheck,
   Plus, Pencil, Check, X, Wallet, Scale, TrendingUp, TrendingDown, Users,
+  Calendar, MessageSquare, Ban,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { marchesService } from '@/lib/api';
@@ -47,6 +48,14 @@ const STATUT_DEPENSE: Record<string, { label: string; color: string }> = {
 };
 const emptyBudgetForm = { id: '', categorie: '', montant_prevu: 0 };
 const emptyDepenseForm = { id: '', categorie: '', description: '', montant_ht: 0, tva_pct: 20, date_depense: new Date().toISOString().split('T')[0] };
+
+// ── Engins / Équipe / Planning / Incidents / Journal (Chantier Fusion-2) ──
+// Même logique : scope PROJET, données réutilisées telles quelles depuis
+// les routes déjà existantes (GET /stock/engins?projet_id=, GET /rh/employes
+// ?projet_id=, GET /projets/:id [phases/taches/incidents], GET /rapports
+// ?projet_id=). Affecter/Libérer un engin réutilise les mêmes routes que
+// /parc-materiel (POST /stock/engins/:id/affectation, /liberer).
+type Engin = { id: string; designation: string; code: string | null; marque: string | null; modele: string | null; projet_id: string | null };
 
 export default function MarcheDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -90,6 +99,66 @@ export default function MarcheDetailPage() {
     queryKey: ['marches-lies', projetId],
     queryFn: () => apiFetch(`/projets/${projetId}/marches`).then(r => r.data || []),
     enabled: !!projetId,
+  });
+
+  const { data: projetDetail } = useQuery({
+    queryKey: ['projet-detail-marche', projetId],
+    queryFn: () => apiFetch(`/projets/${projetId}`).then(r => r.data),
+    enabled: !!projetId,
+  });
+
+  const { data: equipe } = useQuery({
+    queryKey: ['projet-equipe-marche', projetId],
+    queryFn: () => apiFetch(`/rh/employes?projet_id=${projetId}`).then(r => r.data || []),
+    enabled: !!projetId,
+  });
+
+  const { data: journal } = useQuery({
+    queryKey: ['projet-journal-marche', projetId],
+    queryFn: () => apiFetch(`/rapports?projet_id=${projetId}`).then(r => r.data || []),
+    enabled: !!projetId,
+  });
+
+  const { data: enginsAffectes } = useQuery<Engin[]>({
+    queryKey: ['engins-affectes-marche', projetId],
+    queryFn: () => apiFetch(`/stock/engins?projet_id=${projetId}`).then(r => r.data || []),
+    enabled: !!projetId,
+  });
+
+  const { data: enginsTous } = useQuery<Engin[]>({
+    queryKey: ['engins-tous'],
+    queryFn: () => apiFetch('/stock/engins').then(r => r.data || []),
+  });
+
+  const [affectationOuverte, setAffectationOuverte] = useState(false);
+  const [enginChoisi, setEnginChoisi] = useState('');
+
+  const invalidateEngins = () => qc.invalidateQueries({ queryKey: ['engins-affectes-marche', projetId] });
+
+  const affecterEnginMut = useMutation({
+    mutationFn: (enginId: string) => apiFetch(`/stock/engins/${enginId}/affectation`, {
+      method: 'POST', body: JSON.stringify({ projet_id: projetId }),
+    }),
+    onSuccess: (r) => {
+      if (!r.success) throw new Error(r.message);
+      invalidateEngins();
+      qc.invalidateQueries({ queryKey: ['engins-tous'] });
+      toast.success('Engin affecté');
+      setAffectationOuverte(false);
+      setEnginChoisi('');
+    },
+    onError: (err: any) => toast.error(err.message || "Erreur lors de l'affectation"),
+  });
+
+  const libererEnginMut = useMutation({
+    mutationFn: (enginId: string) => apiFetch(`/stock/engins/${enginId}/liberer`, { method: 'POST' }),
+    onSuccess: (r) => {
+      if (!r.success) throw new Error(r.message);
+      invalidateEngins();
+      qc.invalidateQueries({ queryKey: ['engins-tous'] });
+      toast.success('Engin libéré');
+    },
+    onError: (err: any) => toast.error(err.message || 'Erreur lors de la libération'),
   });
 
   const invalidateFinance = () => {
@@ -157,6 +226,8 @@ export default function MarcheDetailPage() {
 
   const autresMarchesLies = (marchesLies || []).filter((m) => m.id !== id);
   const tresorerieMarche = tresorerie?.marches?.find((m) => m.id === id);
+  const openIncidents = Array.isArray(projetDetail?.incidents) ? projetDetail.incidents : [];
+  const enginsDisponibles = (enginsTous || []).filter((e) => e.projet_id !== projetId);
 
   // montant_actualise revient en NUMERIC PostgreSQL sérialisé en chaîne ("0.00" par
   // exemple) : une chaîne non vide est toujours "truthy" en JS, donc un `||` classique
@@ -411,6 +482,131 @@ export default function MarcheDetailPage() {
           </div>
         )}
 
+        {/* Engins / Équipe / Planning / Incidents / Journal (Chantier Fusion-2) */}
+        {projetId && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {autresMarchesLies.length > 0 && (
+              <div className="xl:col-span-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-blue-700 flex items-center gap-2">
+                <Users className="w-4 h-4 flex-shrink-0" />
+                Engins, équipe, planning, incidents et journal communs avec {autresMarchesLies.length > 1 ? 'les marchés' : 'le marché'}{' '}
+                {autresMarchesLies.map((m, i) => (
+                  <span key={m.id}>
+                    {i > 0 && ', '}
+                    <Link href={`/marches/${m.id}`} className="font-medium underline hover:text-blue-900">{m.numero_marche}</Link>
+                  </span>
+                ))}
+                {' '}— même projet, ces éléments ne sont pas propres à ce marché.
+              </div>
+            )}
+
+            {/* Planning */}
+            <Card padded={false}>
+              <CardHeader title="Planning" action={<Calendar className="w-4 h-4 text-gray-400" />} />
+              <div className="divide-y">
+                {!projetDetail?.phases?.length && <p className="px-5 py-8 text-center text-sm text-gray-400">Aucune phase</p>}
+                {projetDetail?.phases?.map((phase: any) => {
+                  const tachesPhase = (projetDetail.taches || []).filter((t: any) => t.phase_id === phase.id);
+                  return (
+                    <div key={phase.id} className="px-5 py-3">
+                      <p className="text-sm font-semibold text-gray-800">{phase.nom}</p>
+                      <div className="mt-2 space-y-1.5">
+                        {tachesPhase.map((t: any) => (
+                          <div key={t.id} className="flex items-center gap-2 text-xs">
+                            <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                              <div className="bg-brand-500 h-full rounded-full" style={{ width: `${t.progression_pct || 0}%` }} />
+                            </div>
+                            <span className="text-gray-500 w-32 truncate">{t.titre}</span>
+                            <span className="text-gray-400 w-10 text-right">{t.progression_pct || 0}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* Incidents ouverts */}
+            <Card padded={false}>
+              <CardHeader title="Incidents ouverts" />
+              <div className="divide-y">
+                {!openIncidents.length && <p className="px-5 py-8 text-center text-sm text-gray-400">Aucun incident ouvert</p>}
+                {openIncidents.map((incident: any) => (
+                  <div key={incident.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{incident.titre || incident.description || 'Incident sans titre'}</p>
+                      {incident.description && <p className="text-xs text-gray-500 mt-0.5">{incident.description}</p>}
+                    </div>
+                    <Badge tone="danger">{fmt.date(incident.date_incident)}</Badge>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Équipe */}
+            <Card padded={false}>
+              <CardHeader title="Équipe" />
+              <div className="divide-y">
+                {!equipe?.length && <p className="px-5 py-8 text-center text-sm text-gray-400">Aucun employé affecté</p>}
+                {equipe?.map((e: any) => (
+                  <div key={e.id} className="flex items-center gap-3 px-5 py-3">
+                    <div className="w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-brand-700 text-xs font-bold">{e.prenom?.[0]}{e.nom?.[0]}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{e.prenom} {e.nom}</p>
+                      <p className="text-xs text-gray-400">{e.poste || e.role_systeme}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Engins affectés — actions Affecter/Libérer, mêmes routes que /parc-materiel.
+                aria-label distinctif par engin (et non "Libérer" x N) : accessibilité +
+                cible non ambiguë pour les scripts de test (voir CLAUDE.md, règle Fusion-2). */}
+            <Card padded={false}>
+              <CardHeader title="Engins affectés" action={
+                <Button size="sm" variant="secondary" icon={<Plus className="w-3.5 h-3.5" />}
+                  aria-label="Affecter un engin à ce marché" data-testid="ouvrir-affectation-engin"
+                  onClick={() => setAffectationOuverte(true)}>Affecter</Button>
+              } />
+              <div className="divide-y">
+                {!enginsAffectes?.length && <p className="px-5 py-8 text-center text-sm text-gray-400">Aucun engin affecté</p>}
+                {enginsAffectes?.map((e) => (
+                  <div key={e.id} className="flex items-center gap-3 px-5 py-3" data-testid={`engin-affecte-${e.id}`}>
+                    <Truck className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{e.designation} ({e.code})</p>
+                      <p className="text-xs text-gray-400">{e.marque} {e.modele}</p>
+                    </div>
+                    <Button size="sm" variant="secondary" icon={<Ban className="w-3.5 h-3.5" />}
+                      aria-label={`Libérer ${e.designation}`} data-testid={`liberer-engin-${e.id}`}
+                      loading={libererEnginMut.isPending} onClick={() => libererEnginMut.mutate(e.id)}>Libérer</Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Journal de chantier */}
+            <Card padded={false}>
+              <CardHeader title="Journal de chantier" action={<MessageSquare className="w-4 h-4 text-gray-400" />} />
+              <div className="divide-y">
+                {!journal?.length && <p className="px-5 py-8 text-center text-sm text-gray-400">Aucun rapport</p>}
+                {journal?.map((r: any) => (
+                  <div key={r.id} className="px-5 py-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-800">{fmt.date(r.date_rapport)}</p>
+                      <span className="text-xs text-gray-400">{r.meteo} · {r.temperature}°C</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{r.travaux_realises}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* Modules complémentaires */}
         <div>
           <h3 className="font-semibold text-gray-800 mb-3">Modules complémentaires</h3>
@@ -498,6 +694,31 @@ export default function MarcheDetailPage() {
             saveDepenseMut.mutate();
           }} loading={saveDepenseMut.isPending}>{depenseForm?.id ? 'Modifier' : 'Créer'}</Button>
           <Button variant="secondary" onClick={() => setDepenseForm(null)}>Annuler</Button>
+        </div>
+      </Modal>
+
+      {/* Modal Affecter un engin — même route que /parc-materiel */}
+      <Modal open={affectationOuverte} onClose={() => { setAffectationOuverte(false); setEnginChoisi(''); }} title="Affecter un engin à ce marché">
+        <div className="space-y-4">
+          <div>
+            <label className="label">Engin *</label>
+            <select className="input" data-testid="select-engin-affectation" value={enginChoisi} onChange={e => setEnginChoisi(e.target.value)}>
+              <option value="">Sélectionner un engin</option>
+              {enginsDisponibles.map(e => (
+                <option key={e.id} value={e.id}>{e.designation} {e.code ? `(${e.code})` : ''}</option>
+              ))}
+            </select>
+            {!enginsDisponibles.length && (
+              <p className="text-xs text-gray-400 mt-1.5">Tous les engins sont déjà affectés à ce marché.</p>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <Button onClick={() => affecterEnginMut.mutate(enginChoisi)} loading={affecterEnginMut.isPending} disabled={!enginChoisi}
+            aria-label="Confirmer l'affectation de l'engin sélectionné" data-testid="confirmer-affectation-engin">
+            Affecter
+          </Button>
+          <Button variant="secondary" onClick={() => { setAffectationOuverte(false); setEnginChoisi(''); }}>Annuler</Button>
         </div>
       </Modal>
     </div>
