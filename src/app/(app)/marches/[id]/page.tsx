@@ -2,16 +2,18 @@
 // src/app/(app)/marches/[id]/page.tsx — Détail d'un marché (Chantier UI-2 : en-tête riche + onglets)
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft, Edit2, FileText, AlertCircle, FileDown,
+  ArrowLeft, Edit2, FileText, AlertCircle, FileDown, Trash2,
   HardHat, Truck, ChevronDown, Wrench, Activity, ClipboardCheck,
 } from 'lucide-react';
 import { marchesService, chargesService, chargesJournalieresService } from '@/lib/api';
 import { fmt } from '@/lib/utils';
 import { exportMarchePDF } from '@/lib/pdf';
+import { useAuthStore } from '@/lib/store';
 import { MarcheStatutBadge } from '@/components/marches/MarcheStatutBadge';
+import { SupprimerMarcheModal } from '@/components/marches/SupprimerMarcheModal';
 import { Card, StatCard, Button, Loading, EmptyState, Tabs } from '@/components/ui';
 import type { TabItem } from '@/components/ui/Tabs';
 import type { ChargeMensuelle } from '@/lib/api';
@@ -23,8 +25,11 @@ const CHAMPS_CHARGE: (keyof ChargeMensuelle)[] = [
 
 export default function MarcheDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const { user } = useAuthStore();
   const [showInfos, setShowInfos] = useState(false);
   const [showIndicateurs, setShowIndicateurs] = useState(false);
+  const [aSupprimer, setASupprimer] = useState<{ id: string; numero_marche: string } | null>(null);
 
   const { data: marche, isLoading } = useQuery({
     queryKey: ['marche', id],
@@ -108,6 +113,11 @@ export default function MarcheDetailPage() {
             <Link href={`/marches/${id}/modifier`} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">
               <Edit2 className="w-4 h-4" /> Modifier
             </Link>
+            {user?.role === 'admin' && (
+              <Button variant="danger" onClick={() => setASupprimer({ id: id!, numero_marche: marche.numero_marche })} icon={<Trash2 className="w-4 h-4" />}>
+                Supprimer
+              </Button>
+            )}
           </div>
         </div>
 
@@ -206,6 +216,12 @@ export default function MarcheDetailPage() {
           </div>
         </div>
       </div>
+
+      <SupprimerMarcheModal
+        marche={aSupprimer}
+        onClose={() => setASupprimer(null)}
+        onDeleted={() => router.push('/marches')}
+      />
     </div>
   );
 }

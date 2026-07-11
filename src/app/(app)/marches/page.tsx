@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Search, Eye, Edit2, TrendingUp, FileDown, Download } from 'lucide-react';
+import { Plus, Search, Eye, Edit2, Trash2, TrendingUp, FileDown, Download } from 'lucide-react';
 import { marchesService } from '@/lib/api';
 import { fmt, STATUTS_MARCHE, exportCSV } from '@/lib/utils';
 import { exportListPDF } from '@/lib/pdf';
+import { useAuthStore } from '@/lib/store';
 import { MarcheStatutBadge } from '@/components/marches/MarcheStatutBadge';
+import { SupprimerMarcheModal } from '@/components/marches/SupprimerMarcheModal';
 import { Card, Table, Input, Button } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import type { Marche } from '@/lib/api';
@@ -16,11 +18,13 @@ import type { Marche } from '@/lib/api';
 export default function MarchesPage() {
   const searchParams = useSearchParams();
   const projetId     = searchParams.get('projet_id') || '';
+  const { user }     = useAuthStore();
   const [search,  setSearch]  = useState('');
   const [statut,  setStatut]  = useState('');
   const [page,    setPage]    = useState(1);
+  const [aSupprimer, setASupprimer] = useState<{ id: string; numero_marche: string } | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['marches', { search, statut, page, projetId }],
     queryFn:  () => marchesService.list({ search, statut, page, limit: 15, projet_id: projetId || undefined }).then(r => r.data),
   });
@@ -110,6 +114,12 @@ export default function MarchesPage() {
           <Link href={`/situations/recap/${m.id}`} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Récapitulatif">
             <TrendingUp className="w-4 h-4 text-gray-500" />
           </Link>
+          {user?.role === 'admin' && (
+            <button onClick={() => setASupprimer({ id: m.id, numero_marche: m.numero_marche })}
+              className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" title="Supprimer">
+              <Trash2 className="w-4 h-4 text-red-400" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -189,6 +199,12 @@ export default function MarchesPage() {
           </div>
         )}
       </Card>
+
+      <SupprimerMarcheModal
+        marche={aSupprimer}
+        onClose={() => setASupprimer(null)}
+        onDeleted={() => { setASupprimer(null); refetch(); }}
+      />
     </div>
   );
 }
