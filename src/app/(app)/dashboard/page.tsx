@@ -1,7 +1,7 @@
 // src/app/(app)/dashboard/page.tsx — Dashboard Directeur V2.1
 //
 // Refonte selon la maquette validée (Chantier Dashboard-V2.1) : en-tête,
-// 4 KPI (Projets/Marchés/Engins/Alertes), Alertes + Activité récente,
+// KPI (Projets/Marchés/Engins/Alertes), Alertes + Activité récente,
 // tableau Projets en cours. Construit uniquement avec des endpoints déjà
 // existants (aucune logique métier ajoutée côté backend) :
 //   - GET /api/projets?statut=en_cours
@@ -10,17 +10,24 @@
 //   - GET /api/alertes/summary, GET /api/alertes
 //   - GET /api/notifications
 //
-// Aucun KPI financier (CA/dépenses/trésorerie) tant que les chantiers
-// Finance ne sont pas terminés. Le panneau IA reviendra avec le module IA.
+// KPI "Trésorerie" (Chantier Finance-F) : seul KPI financier, ajouté une
+// fois les chantiers Finance A→F terminés — alimenté par GET
+// /api/finance/tresorerie, qui consomme TresorerieService.computeTresorerie(),
+// la même fonction que /projets/[id] (pas de calcul parallèle). Réservé aux
+// rôles comptable et au-dessus (donnée financière globale sensible), comme
+// la route backend elle-même. Le panneau IA reviendra avec le module IA.
 'use client';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Truck, AlertTriangle, FolderKanban, Bell } from 'lucide-react';
+import { FileText, Truck, AlertTriangle, FolderKanban, Bell, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { fmt } from '@/lib/utils';
+import { useAuthStore } from '@/lib/store';
 import { Card, CardHeader, KpiCard, Badge, EmptyState, Loading, Table } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
+
+const PEUT_VOIR_TRESORERIE = ['admin', 'directeur', 'chef_projet', 'ingenieur', 'comptable'];
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl_token') || '' : '');
@@ -54,6 +61,9 @@ const STATUT_PROJET_COLOR: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const { user } = useAuthStore();
+  const peutVoirTresorerie = PEUT_VOIR_TRESORERIE.includes(user?.role || '');
+
   const { data: projetsData, isLoading: loadingProjets } = useQuery({
     queryKey: ['dashboard-projets-en-cours'],
     queryFn: () => apiFetch('/projets?statut=en_cours&limit=50'),
@@ -86,6 +96,13 @@ export default function DashboardPage() {
     queryFn: () => apiFetch('/notifications').then((r) => r.data || []),
   });
 
+  const { data: tresorerie } = useQuery({
+    queryKey: ['dashboard-tresorerie'],
+    queryFn: () => apiFetch('/finance/tresorerie').then((r) => (r.success ? r.data : null)),
+    enabled: peutVoirTresorerie,
+    refetchInterval: 60000,
+  });
+
   if (loadingMarches || loadingProjets) return <Loading label="Chargement du tableau de bord..." />;
   if (!marchesDash) return null;
 
@@ -103,6 +120,11 @@ export default function DashboardPage() {
     { label: 'Marchés',  value: stats.total,           icon: FileText,      color: 'bg-brand-500', sub: fmt.currency(stats.montant_total) },
     { label: 'Engins',   value: engins.length,         icon: Truck,         color: 'bg-slate-500', sub: `${enginsDisponibles} disponible(s)` },
     { label: 'Alertes',  value: totalActives,          icon: AlertTriangle, color: 'bg-rose-500',  sub: `${totalCritiques} critique(s)` },
+    ...(peutVoirTresorerie && tresorerie ? [{
+      label: 'Trésorerie', value: fmt.currency(tresorerie.solde), icon: Wallet,
+      color: tresorerie.solde >= 0 ? 'bg-emerald-500' : 'bg-orange-500',
+      sub: `Encaissé ${fmt.currency(tresorerie.encaissement_total)}`,
+    }] : []),
   ];
 
   const columns: TableColumn<Projet>[] = [

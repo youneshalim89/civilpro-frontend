@@ -17,6 +17,7 @@ const apiFetch = (url: string, opts?: RequestInit) =>
 
 const CATEGORIES: Record<string, { label: string; color: string }> = {
   decompte:         { label: 'Décompte',         color: 'bg-blue-100 text-blue-700' },
+  facture:          { label: 'Facture',          color: 'bg-indigo-100 text-indigo-700' },
   cotisation:       { label: 'Cotisation',       color: 'bg-purple-100 text-purple-700' },
   vente_materiaux:  { label: 'Vente matériaux',  color: 'bg-amber-100 text-amber-700' },
   autres_travaux:   { label: 'Autres travaux',   color: 'bg-emerald-100 text-emerald-700' },
@@ -49,7 +50,7 @@ export default function CaissePage() {
 
   const historique = data?.historique || [];
   const s = data?.synthese || {
-    total_decomptes: 0, total_cotisation: 0, total_vente_materiaux: 0,
+    total_decomptes: 0, total_factures: 0, total_cotisation: 0, total_vente_materiaux: 0,
     total_autres_travaux: 0, total_autre: 0, total_entree: 0, total_sortie: 0, solde: 0,
   };
 
@@ -117,10 +118,14 @@ export default function CaissePage() {
       </div>
 
       {/* Détail des sources d'entrée */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
         <Card className="p-4">
           <p className="text-xs text-gray-500">Décomptes payés</p>
           <p className="text-lg font-bold text-blue-600 mt-1">{fmt.currency(s.total_decomptes)}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs text-gray-500">Factures payées</p>
+          <p className="text-lg font-bold text-indigo-600 mt-1">{fmt.currency(s.total_factures)}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-gray-500">Cotisations</p>
@@ -186,7 +191,7 @@ export default function CaissePage() {
 
       {/* Historique combiné */}
       <Card padded={false}>
-        <CardHeader title="Historique des mouvements (décomptes + entrées manuelles)" />
+        <CardHeader title="Historique des mouvements (décomptes + factures payées + entrées manuelles)" />
         <Table<any>
           columns={historiqueColumns}
           data={historique}

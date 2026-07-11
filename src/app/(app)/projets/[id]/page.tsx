@@ -12,14 +12,14 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, FileText, TrendingDown, Landmark, Users, Truck, AlertTriangle,
-  Calendar, MessageSquare, Plus, Pencil, Trash2, Check, X,
+  ArrowLeft, FileText, TrendingDown, TrendingUp, Landmark, Users, Truck, AlertTriangle,
+  Calendar, MessageSquare, Plus, Pencil, Trash2, Check, X, Wallet, Scale,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { fmt } from '@/lib/utils';
 import { useAuthStore } from '@/lib/store';
-import { Card, CardHeader, KpiCard, Badge, Button, Modal, EmptyState, Loading, Tabs } from '@/components/ui';
+import { Card, CardHeader, KpiCard, Badge, Button, Modal, StatCard, EmptyState, Loading, Tabs } from '@/components/ui';
 import type { TabItem } from '@/components/ui/Tabs';
 import NumberInput from '@/components/NumberInput';
 
@@ -41,6 +41,13 @@ const STATUT_DEPENSE: Record<string, { label: string; color: string }> = {
   en_attente: { label: 'En attente', color: 'bg-yellow-100 text-yellow-700' },
   validee:    { label: 'Validée',    color: 'bg-green-100 text-green-700' },
   rejetee:    { label: 'Rejetée',    color: 'bg-red-100 text-red-700' },
+};
+
+type TresorerieMarche = { id: string; numero_marche: string; objet: string; encaissement: number; decaissement: number; solde: number };
+type Tresorerie = {
+  marches: TresorerieMarche[];
+  encaissement_marches: number; decaissement_marches: number; decaissement_depenses: number;
+  encaissement_total: number; decaissement_total: number; solde: number;
 };
 
 const emptyBudgetForm = { id: '', categorie: '', montant_prevu: 0 };
@@ -101,10 +108,16 @@ export default function FicheProjetPage() {
     queryFn: () => apiFetch(`/finance/depenses?projet_id=${id}`).then((r) => r.data || []),
   });
 
+  const { data: tresorerie } = useQuery<Tresorerie | undefined>({
+    queryKey: ['tresorerie-projet', id],
+    queryFn: () => apiFetch(`/projets/${id}/tresorerie`).then((r) => r.data),
+  });
+
   const invalidateFinance = () => {
     qc.invalidateQueries({ queryKey: ['finance-budgets', id] });
     qc.invalidateQueries({ queryKey: ['finance-depenses', id] });
     qc.invalidateQueries({ queryKey: ['projet-dashboard', id] });
+    qc.invalidateQueries({ queryKey: ['tresorerie-projet', id] });
   };
 
   const saveBudgetMut = useMutation({
@@ -246,6 +259,48 @@ export default function FicheProjetPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </Card>
+
+        {/* Trésorerie consolidée (Chantier Finance-F) */}
+        <Card padded={false}>
+          <CardHeader title="Trésorerie consolidée" action={
+            <span className="text-xs text-gray-400">Marchés liés + dépenses validées</span>
+          } />
+          <div className="p-5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatCard label="Encaissement" tone="green" icon={TrendingUp} value={fmt.currency(tresorerie?.encaissement_total ?? 0)} />
+              <StatCard label="Décaissement" tone="red" icon={TrendingDown} value={fmt.currency(tresorerie?.decaissement_total ?? 0)} />
+              <StatCard label="Solde" tone={(tresorerie?.solde ?? 0) >= 0 ? 'blue' : 'orange'} icon={Scale} value={fmt.currency(tresorerie?.solde ?? 0)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Card className="p-3">
+                <p className="text-xs text-gray-500">Décaissement marchés (charges)</p>
+                <p className="text-sm font-semibold text-gray-800 mt-1">{fmt.currency(tresorerie?.decaissement_marches ?? 0)}</p>
+              </Card>
+              <Card className="p-3">
+                <p className="text-xs text-gray-500">Décaissement dépenses de projet</p>
+                <p className="text-sm font-semibold text-gray-800 mt-1">{fmt.currency(tresorerie?.decaissement_depenses ?? 0)}</p>
+              </Card>
+            </div>
+            {!tresorerie?.marches?.length && <p className="text-sm text-gray-400 text-center py-4">Aucun marché lié</p>}
+            {!!tresorerie?.marches?.length && (
+              <div className="divide-y border-t">
+                {tresorerie.marches.map((m) => (
+                  <div key={m.id} className="flex items-center justify-between py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{m.numero_marche}</p>
+                      <p className="text-xs text-gray-400 truncate">{m.objet}</p>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm flex-shrink-0">
+                      <span className="text-green-600">+{fmt.currency(m.encaissement)}</span>
+                      <span className="text-red-500">-{fmt.currency(m.decaissement)}</span>
+                      <span className={`font-semibold ${m.solde >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>{fmt.currency(m.solde)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </Card>
 
