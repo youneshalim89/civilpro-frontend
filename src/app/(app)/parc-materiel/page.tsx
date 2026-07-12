@@ -2,7 +2,7 @@
 // src/app/(app)/parc-materiel/page.tsx — Gestion du parc matériel (engins), Design System V2
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Truck, Wrench, Fuel, AlertTriangle, Download, MapPin, History, Ban } from 'lucide-react';
+import { Truck, Wrench, Fuel, AlertTriangle, Download, MapPin, History, Ban, Plus, Edit2, XCircle, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { fmt, exportCSV } from '@/lib/utils';
@@ -17,7 +17,7 @@ const apiFetch = (url: string, opts?: RequestInit) =>
 
 type Engin = {
   id: string; code: string | null; designation: string; marque: string | null; modele: string | null;
-  immatriculation: string | null; type_engin: string | null; categorie_nom: string | null;
+  immatriculation: string | null; type_engin: string | null; categorie_id: string | null; categorie_nom: string | null;
   statut: string; projet_id: string | null; projet_nom: string | null; code_projet: string | null;
   maintenances_actives: string | number;
 };
@@ -30,6 +30,7 @@ type Maintenance = {
 };
 
 type Projet = { id: string; nom: string; code_projet: string };
+type Categorie = { id: string; nom: string };
 type Materiau = { id: string; designation: string; quantite_stock: number; quantite_min: number; unite_mesure: string; statut: string; prix_unitaire_ht: number };
 type CarburantMois = { mois: string; litres: number; montant: number; heures: number; l_par_h: number | null; anomalie_pct: number | null };
 
@@ -38,9 +39,19 @@ const STATUT_ENGIN_COLOR: Record<string, string> = {
   en_service:  'bg-blue-100 text-blue-700',
   maintenance: 'bg-yellow-100 text-yellow-700',
   en_panne:    'bg-red-100 text-red-700',
+  retire:      'bg-gray-200 text-gray-600',
 };
 const STATUT_ENGIN_LABEL: Record<string, string> = {
-  disponible: 'Disponible', en_service: 'En service', maintenance: 'Maintenance', en_panne: 'En panne',
+  disponible: 'Disponible', en_service: 'En service', maintenance: 'Maintenance', en_panne: 'En panne', retire: 'Retiré',
+};
+
+// Chantier PM-2 : statuts sélectionnables depuis le formulaire d'édition —
+// "retire" n'y figure jamais, atteignable uniquement via l'action dédiée
+// "Retirer" (confirmation requise), jamais par un simple changement de statut.
+const STATUTS_ENGIN_EDITABLES = ['disponible', 'en_service', 'maintenance', 'en_panne'];
+
+const emptyEnginForm = {
+  designation: '', code: '', marque: '', modele: '', immatriculation: '', type_engin: '', categorie_id: '', statut: 'disponible',
 };
 
 const TYPE_MAINT_LABEL: Record<string, string> = {
@@ -71,15 +82,25 @@ export default function ParcMaterielPage() {
   const [historiqueEngin, setHistoriqueEngin] = useState<Engin | null>(null);
   const [cloture, setCloture] = useState<{ maintenance: Maintenance; coutReel: number } | null>(null);
   const [carburantEngin, setCarburantEngin] = useState<Engin | null>(null);
+  const [avecRetires, setAvecRetires] = useState(false);
+  const [enginEdite, setEnginEdite] = useState<Engin | null>(null);
+  const [enginModalOuvert, setEnginModalOuvert] = useState(false);
+  const [enginForm, setEnginForm] = useState(emptyEnginForm);
+  const [retraitEngin, setRetraitEngin] = useState<Engin | null>(null);
 
   const { data: enginsData, isLoading } = useQuery({
-    queryKey: ['parc-engins', projetFiltre],
-    queryFn: () => apiFetch(`/stock/engins${projetFiltre ? `?projet_id=${projetFiltre}` : ''}`).then(r => r.data || []),
+    queryKey: ['parc-engins', projetFiltre, avecRetires],
+    queryFn: () => apiFetch(`/stock/engins?${projetFiltre ? `projet_id=${projetFiltre}&` : ''}avec_retires=${avecRetires}`).then(r => r.data || []),
   });
 
   const { data: projetsData } = useQuery({
     queryKey: ['parc-projets'],
     queryFn: () => apiFetch('/projets?limit=100').then(r => r.data || []),
+  });
+
+  const { data: categoriesData } = useQuery({
+    queryKey: ['parc-categories'],
+    queryFn: () => apiFetch('/stock/categories').then(r => r.data || []),
   });
 
   const { data: materiauxData } = useQuery({
@@ -101,6 +122,7 @@ export default function ParcMaterielPage() {
 
   const engins: Engin[] = enginsData || [];
   const projets: Projet[] = projetsData || [];
+  const categories: Categorie[] = categoriesData || [];
   const gasoil: Materiau | undefined = (materiauxData || [])[0];
   const maintenances: Maintenance[] = maintenancesEngin || [];
   const carburantMois: CarburantMois[] = carburantData || [];
@@ -146,6 +168,53 @@ export default function ParcMaterielPage() {
     onSuccess: () => { invalidateEngins(); toast.success('Engin libéré du marché'); },
     onError: (err: any) => toast.error(err.message || 'Erreur lors de la libération'),
   });
+
+  const creerEnginMut = useMutation({
+    mutationFn: () => apiFetch('/stock/engins', { method: 'POST', body: JSON.stringify(enginForm) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
+    onSuccess: () => {
+      invalidateEngins();
+      toast.success('Engin créé');
+      setEnginModalOuvert(false); setEnginForm(emptyEnginForm);
+    },
+    onError: (err: any) => toast.error(err.message || 'Erreur lors de la création'),
+  });
+
+  const modifierEnginMut = useMutation({
+    mutationFn: () => apiFetch(`/stock/engins/${enginEdite!.id}`, { method: 'PUT', body: JSON.stringify(enginForm) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
+    onSuccess: () => {
+      invalidateEngins();
+      toast.success('Engin modifié');
+      setEnginModalOuvert(false); setEnginEdite(null); setEnginForm(emptyEnginForm);
+    },
+    onError: (err: any) => toast.error(err.message || 'Erreur lors de la modification'),
+  });
+
+  const retirerEnginMut = useMutation({
+    mutationFn: (engin: Engin) => apiFetch(`/stock/engins/${engin.id}/retirer`, { method: 'POST' })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
+    onSuccess: () => { invalidateEngins(); toast.success('Engin retiré du parc'); setRetraitEngin(null); },
+    onError: (err: any) => toast.error(err.message || 'Erreur lors du retrait'),
+  });
+
+  const reactiverEnginMut = useMutation({
+    mutationFn: (engin: Engin) => apiFetch(`/stock/engins/${engin.id}`, { method: 'PUT', body: JSON.stringify({ statut: 'disponible' }) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
+    onSuccess: () => { invalidateEngins(); toast.success('Engin réactivé'); },
+    onError: (err: any) => toast.error(err.message || 'Erreur lors de la réactivation'),
+  });
+
+  const ouvrirCreation = () => { setEnginEdite(null); setEnginForm(emptyEnginForm); setEnginModalOuvert(true); };
+  const ouvrirModification = (e: Engin) => {
+    setEnginEdite(e);
+    setEnginForm({
+      designation: e.designation || '', code: e.code || '', marque: e.marque || '', modele: e.modele || '',
+      immatriculation: e.immatriculation || '', type_engin: e.type_engin || '',
+      categorie_id: e.categorie_id || '', statut: e.statut,
+    });
+    setEnginModalOuvert(true);
+  };
 
   const planifierMut = useMutation({
     mutationFn: () => apiFetch(`/stock/engins/${maintenanceEngin!.id}/maintenance`, {
@@ -209,14 +278,22 @@ export default function ParcMaterielPage() {
       ? <Badge tone="warning">{e.maintenances_actives}</Badge>
       : <span className="text-gray-300 text-xs">—</span>,
     },
-    { key: 'actions', header: 'Actions', render: e => (
+    { key: 'actions', header: 'Actions', render: e => e.statut === 'retire' ? (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Button size="sm" variant="secondary" icon={<Edit2 className="w-3.5 h-3.5" />}
+          data-testid={`modifier-engin-${e.id}`} onClick={() => ouvrirModification(e)}>Modifier</Button>
+        <Button size="sm" variant="secondary" icon={<RotateCcw className="w-3.5 h-3.5" />}
+          data-testid={`reactiver-engin-${e.id}`} loading={reactiverEnginMut.isPending}
+          onClick={() => reactiverEnginMut.mutate(e)}>Réactiver</Button>
+      </div>
+    ) : (
       <div className="flex items-center gap-1.5 flex-wrap">
         {e.projet_id ? (
           <Button size="sm" variant="secondary" icon={<Ban className="w-3.5 h-3.5" />}
-            onClick={() => libererMut.mutate(e)} loading={libererMut.isPending}>Libérer</Button>
+            data-testid={`liberer-engin-${e.id}`} onClick={() => libererMut.mutate(e)} loading={libererMut.isPending}>Libérer</Button>
         ) : (
           <Button size="sm" variant="secondary" icon={<MapPin className="w-3.5 h-3.5" />}
-            onClick={() => { setAffectationEngin(e); setProjetChoisi(''); }}>Affecter</Button>
+            data-testid={`affecter-engin-${e.id}`} onClick={() => { setAffectationEngin(e); setProjetChoisi(''); }}>Affecter</Button>
         )}
         <Button size="sm" variant="secondary" icon={<Wrench className="w-3.5 h-3.5" />}
           onClick={() => { setMaintenanceEngin(e); setMaintForm(emptyMaintenanceForm); }}>Entretien</Button>
@@ -224,6 +301,10 @@ export default function ParcMaterielPage() {
           onClick={() => setHistoriqueEngin(e)}>Historique</Button>
         <Button size="sm" variant="ghost" icon={<Fuel className="w-3.5 h-3.5" />}
           onClick={() => setCarburantEngin(e)}>Carburant</Button>
+        <Button size="sm" variant="ghost" icon={<Edit2 className="w-3.5 h-3.5" />}
+          data-testid={`modifier-engin-${e.id}`} onClick={() => ouvrirModification(e)}>Modifier</Button>
+        <Button size="sm" variant="ghost" icon={<XCircle className="w-3.5 h-3.5" />}
+          data-testid={`retirer-engin-${e.id}`} onClick={() => setRetraitEngin(e)}>Retirer</Button>
       </div>
     ) },
   ];
@@ -264,7 +345,10 @@ export default function ParcMaterielPage() {
           <h1 className="text-2xl font-bold text-gray-900">Parc Matériel</h1>
           <p className="text-sm text-gray-500">{totalEngins} engin(s)</p>
         </div>
-        <Button variant="secondary" onClick={handleExportCSV} icon={<Download className="w-4 h-4" />}>CSV</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={handleExportCSV} icon={<Download className="w-4 h-4" />}>CSV</Button>
+          <Button data-testid="ouvrir-creation-engin" onClick={ouvrirCreation} icon={<Plus className="w-4 h-4" />}>Nouvel engin</Button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -330,6 +414,10 @@ export default function ParcMaterielPage() {
           <option value="">Tous les marchés</option>
           {projets.map(p => <option key={p.id} value={p.id}>{p.code_projet} — {p.nom}</option>)}
         </select>
+        <label className="flex items-center gap-2 text-sm text-gray-600 px-1">
+          <input type="checkbox" checked={avecRetires} onChange={e => setAvecRetires(e.target.checked)} />
+          Afficher les engins retirés
+        </label>
       </Card>
 
       {/* Tableau engins */}
@@ -446,6 +534,95 @@ export default function ParcMaterielPage() {
         <div className="flex gap-3 mt-6">
           <Button onClick={() => cloturerMut.mutate()} loading={cloturerMut.isPending}>Clôturer</Button>
           <Button variant="secondary" onClick={() => setCloture(null)}>Annuler</Button>
+        </div>
+      </Modal>
+
+      {/* Modal Nouvel engin / Modifier un engin (Chantier PM-2) */}
+      <Modal open={enginModalOuvert} onClose={() => { setEnginModalOuvert(false); setEnginEdite(null); }}
+        title={enginEdite ? `Modifier — ${enginEdite.designation}` : 'Nouvel engin'}>
+        <div className="space-y-4">
+          <div>
+            <label className="label">Désignation *</label>
+            <input className="input" data-testid="engin-form-designation" value={enginForm.designation}
+              onChange={e => setEnginForm(f => ({ ...f, designation: e.target.value }))} placeholder="Ex: Camion 8x4" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Code</label>
+              <input className="input" value={enginForm.code}
+                onChange={e => setEnginForm(f => ({ ...f, code: e.target.value }))} placeholder="Ex: ENG-001" />
+            </div>
+            <div>
+              <label className="label">Catégorie</label>
+              <select className="input" value={enginForm.categorie_id}
+                onChange={e => setEnginForm(f => ({ ...f, categorie_id: e.target.value }))}>
+                <option value="">Aucune</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Marque</label>
+              <input className="input" value={enginForm.marque}
+                onChange={e => setEnginForm(f => ({ ...f, marque: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Modèle</label>
+              <input className="input" value={enginForm.modele}
+                onChange={e => setEnginForm(f => ({ ...f, modele: e.target.value }))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Type</label>
+              <input className="input" value={enginForm.type_engin}
+                onChange={e => setEnginForm(f => ({ ...f, type_engin: e.target.value }))} placeholder="Ex: Camion benne 8x4" />
+            </div>
+            <div>
+              <label className="label">Immatriculation</label>
+              <input className="input" value={enginForm.immatriculation}
+                onChange={e => setEnginForm(f => ({ ...f, immatriculation: e.target.value }))} />
+            </div>
+          </div>
+          {enginEdite && (
+            <div>
+              <label className="label">Statut</label>
+              <select className="input" value={enginForm.statut}
+                onChange={e => setEnginForm(f => ({ ...f, statut: e.target.value }))}>
+                {STATUTS_ENGIN_EDITABLES.map(s => <option key={s} value={s}>{STATUT_ENGIN_LABEL[s]}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-3 mt-6">
+          <Button data-testid="confirmer-engin-form"
+            onClick={() => enginEdite ? modifierEnginMut.mutate() : creerEnginMut.mutate()}
+            loading={creerEnginMut.isPending || modifierEnginMut.isPending} disabled={!enginForm.designation}>
+            {enginEdite ? 'Enregistrer' : 'Créer'}
+          </Button>
+          <Button variant="secondary" onClick={() => { setEnginModalOuvert(false); setEnginEdite(null); }}>Annuler</Button>
+        </div>
+      </Modal>
+
+      {/* Modal Retirer un engin (Chantier PM-2) — désactivation logique, jamais de suppression physique */}
+      <Modal open={!!retraitEngin} onClose={() => setRetraitEngin(null)} title="Retirer un engin">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            Retirer <strong>{retraitEngin?.designation}</strong> du parc actif ? L'engin ne sera plus proposé pour affectation,
+            mais son historique (affectations, maintenances, carburant) reste conservé. Cette action est réversible (bouton "Réactiver").
+          </p>
+          {retraitEngin?.projet_id && (
+            <p className="text-sm text-red-600">Cet engin est actuellement affecté — libérez-le d'abord.</p>
+          )}
+        </div>
+        <div className="flex gap-3 mt-6">
+          <Button variant="danger" data-testid="confirmer-retrait-engin"
+            onClick={() => retirerEnginMut.mutate(retraitEngin!)} loading={retirerEnginMut.isPending}
+            disabled={!!retraitEngin?.projet_id}>
+            Retirer
+          </Button>
+          <Button variant="secondary" onClick={() => setRetraitEngin(null)}>Annuler</Button>
         </div>
       </Modal>
     </div>
