@@ -6,7 +6,7 @@ import { Package, AlertTriangle, Download, FileDown, Repeat } from 'lucide-react
 import toast from 'react-hot-toast';
 import { fmt, exportCSV } from '@/lib/utils';
 import { exportListPDF } from '@/lib/pdf';
-import { Card, CardHeader, Table, Badge, Button, Modal, StatCard, Input } from '@/components/ui';
+import { Card, CardHeader, Table, Badge, Button, Modal, StatCard, Input, Tabs } from '@/components/ui';
 import type { TableColumn } from '@/components/ui/Table';
 import NumberInput from '@/components/NumberInput';
 
@@ -194,6 +194,11 @@ export default function StockPage() {
           <Button variant="secondary" onClick={handleExportPDF} icon={<FileDown className="w-4 h-4" />}>PDF</Button>
         </div>
       </div>
+
+      <Tabs items={[
+        { label: 'Matériaux', href: '/stock' },
+        { label: 'Fournisseurs', href: '/stock/fournisseurs' },
+      ]} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
