@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, Trash2, Pencil, Plus, Truck, Package, Wrench, Fuel, Users, CalendarDays, CalendarRange, Calendar } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Pencil, Plus, Truck, Package, Wrench, Fuel, Users, CalendarDays, CalendarRange, Calendar, Car, Route, ShoppingCart, HardHat } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fmt } from '@/lib/utils';
 import { EnginsDatalist } from '@/components/marches/EnginsDatalist';
@@ -37,14 +37,30 @@ const UNITE_PAR_MATERIAU: Record<string, string> = {
   'Sable': 'm³', 'Tout-venant': 'm³', 'Gravette': 'm³', 'Grave concassée': 'm³',
 };
 
+// Chantier Categories-Charges : "achat_materiaux" (matériaux consommables —
+// ciment, agrégats...) et "achat_materiel" (outillage/équipement) coexistent
+// volontairement — libellés distincts pour éviter la confusion à la saisie.
 const CATEGORIES_JOUR: Record<string, { label: string; icon: any }> = {
-  gasoil:             { label: 'Gasoil',           icon: Fuel },
-  main_oeuvre:        { label: "Main d'œuvre",     icon: Users },
-  achat_materiaux:    { label: 'Fournitures',      icon: Package },
-  reparations:        { label: 'Réparations',      icon: Wrench },
-  location_materiel:  { label: 'Location matériel',icon: Truck },
-  autre:              { label: 'Divers',           icon: Calendar },
+  gasoil:             { label: 'Gasoil',                          icon: Fuel },
+  main_oeuvre:        { label: "Main d'œuvre",                    icon: Users },
+  achat_materiaux:    { label: 'Fournitures (matériaux)',         icon: Package },
+  achat_materiel:     { label: 'Achat de matériel (outillage)',   icon: ShoppingCart },
+  reparations:        { label: 'Réparations',                     icon: Wrench },
+  location_materiel:  { label: 'Location matériel',               icon: Truck },
+  frais_deplacement:  { label: 'Frais de déplacement',            icon: Car },
+  frais_transport:    { label: 'Frais de transport',              icon: Route },
+  sous_traitant:      { label: 'Sous-traitant',                   icon: HardHat },
+  autre:              { label: 'Divers',                          icon: Calendar },
 };
+
+// Unité par défaut proposée à la sélection de la catégorie (reste modifiable manuellement).
+const UNITE_DEFAUT_CATEGORIE: Record<string, string> = {
+  achat_materiaux: 'm³', gasoil: 'L',
+  frais_deplacement: 'forfait', frais_transport: 'forfait', achat_materiel: 'forfait', sous_traitant: 'forfait',
+};
+
+// Catégories à désignation libre (pas de sélecteur dédié type engin/matériau)
+const CATEGORIES_DESIGNATION_LIBRE = ['autre', 'gasoil', 'main_oeuvre', 'reparations', 'frais_deplacement', 'frais_transport', 'achat_materiel', 'sous_traitant'];
 
 // Composants de date locaux (pas toISOString) — évite le décalage d'un jour
 // selon le fuseau horaire, même correctif que Fix-Pointage-TZ.
@@ -382,7 +398,7 @@ export default function ChargesPage() {
                 <select className="input text-sm" value={jourForm.categorie}
                   onChange={e => setJourForm(f => ({
                     ...f, categorie: e.target.value as ChargeJournaliere['categorie'],
-                    designation: '', unite: e.target.value === 'achat_materiaux' ? 'm³' : e.target.value === 'gasoil' ? 'L' : 'jour',
+                    designation: '', unite: UNITE_DEFAUT_CATEGORIE[e.target.value] || 'jour',
                   }))}>
                   {Object.entries(CATEGORIES_JOUR).map(([v, c]) => <option key={v} value={v}>{c.label}</option>)}
                 </select>
@@ -409,7 +425,7 @@ export default function ChargesPage() {
                   </datalist>
                 </div>
               )}
-              {['autre', 'gasoil', 'main_oeuvre', 'reparations'].includes(jourForm.categorie) && (
+              {CATEGORIES_DESIGNATION_LIBRE.includes(jourForm.categorie) && (
                 <div className="xl:col-span-2">
                   <label className="label">Désignation *</label>
                   <input className="input text-sm" placeholder="Ex: Plein gasoil pelle, Journaliers coffrage..." value={jourForm.designation}

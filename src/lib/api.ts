@@ -236,7 +236,8 @@ export interface ChargeJournaliere {
   id: string;
   marche_id: string;
   date_jour: string;
-  categorie: 'location_materiel' | 'achat_materiaux' | 'autre' | 'gasoil' | 'main_oeuvre' | 'reparations';
+  categorie: 'location_materiel' | 'achat_materiaux' | 'autre' | 'gasoil' | 'main_oeuvre' | 'reparations'
+    | 'frais_deplacement' | 'frais_transport' | 'achat_materiel' | 'sous_traitant';
   designation: string;
   quantite: number;
   unite: string;
