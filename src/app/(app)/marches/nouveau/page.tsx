@@ -1,10 +1,10 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Building2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { marchesService, projetsService, type ProjetLite } from '@/lib/api';
+import { marchesService } from '@/lib/api';
 import { Card, Input, Button } from '@/components/ui';
 import NumberInput from '@/components/NumberInput';
 
@@ -23,14 +23,8 @@ export default function NouveauMarchePage() {
     taux_tva:                20,
     taux_retenue_garantie:   7,
     chef_marche_id:          '',
-    projet_id:               '',
   });
   const [saving, setSaving] = useState(false);
-  const [projets, setProjets] = useState<ProjetLite[]>([]);
-
-  useEffect(() => {
-    projetsService.list().then(r => setProjets(r.data.data || [])).catch(() => {});
-  }, []);
 
   const dateFin = () => {
     const d = new Date(form.date_commencement);
@@ -48,7 +42,7 @@ export default function NouveauMarchePage() {
     }
     setSaving(true);
     try {
-      const res = await marchesService.create({ ...form, projet_id: form.projet_id || undefined });
+      const res = await marchesService.create(form);
       toast.success(`Marché ${form.numero_marche} créé avec succès`);
       router.push(`/marches/${res.data.data.id}`);
     } catch (err: any) {
@@ -87,15 +81,6 @@ export default function NouveauMarchePage() {
                 placeholder="Description complète de l'objet du marché..." required />
             </div>
             <Input label="Entreprise attributaire" value={form.entreprise_attributaire} onChange={set('entreprise_attributaire')} className={fieldClassName} />
-            <div>
-              <label className="label">Projet lié</label>
-              <select className="input w-full" value={form.projet_id} onChange={set('projet_id')}>
-                <option value="">Aucun projet</option>
-                {projets.map(p => (
-                  <option key={p.id} value={p.id}>{p.code_projet} — {p.nom}</option>
-                ))}
-              </select>
-            </div>
           </div>
         </Card>
 

@@ -68,11 +68,14 @@ export default function MarchesPage() {
     },
     {
       key: 'projet_lie', header: 'Projet lié',
-      render: (m) => m.projet_id ? (
-        <Link href={`/projets/${m.projet_id}`} className="text-brand-600 hover:underline font-medium text-sm">
-          {m.projet_code || m.projet_nom}
-        </Link>
-      ) : <span className="text-gray-400 text-sm">—</span>,
+      render: (m) => {
+        const marcheLie = m.projet_id ? marches.find(autre => autre.id !== m.id && autre.projet_id === m.projet_id) : undefined;
+        return marcheLie ? (
+          <Link href={`/marches/${marcheLie.id}`} className="text-brand-600 hover:underline font-medium text-sm">
+            {marcheLie.numero_marche}
+          </Link>
+        ) : <span className="text-gray-400 text-sm">—</span>;
+      },
     },
     {
       key: 'montant_initial', header: 'Montant',

@@ -272,9 +272,9 @@ export default function MarcheDetailPage() {
                     <AlertCircle className="w-3 h-3" /> {marche.jours_restants}j restants
                   </span>
                 )}
-                {marche.projet_id && (
-                  <Link href={`/projets/${marche.projet_id}`} className="badge bg-brand-50 text-brand-700 hover:bg-brand-100 transition-colors">
-                    Projet : {marche.projet_code || marche.projet_nom}
+                {autresMarchesLies.length > 0 && (
+                  <Link href={`/marches/${autresMarchesLies[0].id}`} data-testid={`voir-marche-lie-${autresMarchesLies[0].id}`} className="badge bg-brand-50 text-brand-700 hover:bg-brand-100 transition-colors">
+                    Voir {autresMarchesLies.length > 1 ? 'les marchés liés' : 'le marché lié'} ({autresMarchesLies[0].numero_marche})
                   </Link>
                 )}
               </div>

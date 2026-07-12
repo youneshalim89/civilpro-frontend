@@ -1,10 +1,10 @@
 // src/app/(app)/dashboard/page.tsx — Dashboard Directeur V2.1
 //
 // Refonte selon la maquette validée (Chantier Dashboard-V2.1) : en-tête,
-// KPI (Projets/Marchés/Engins/Alertes), Alertes + Activité récente,
-// tableau Projets en cours. Construit uniquement avec des endpoints déjà
+// KPI (Marchés en cours/Marchés/Engins/Alertes), Alertes + Activité récente,
+// tableau Marchés en cours. Construit uniquement avec des endpoints déjà
 // existants (aucune logique métier ajoutée côté backend) :
-//   - GET /api/projets?statut=en_cours
+//   - GET /api/marches?statut=en_cours (Chantier Fusion-3 : remplace GET /api/projets?statut=en_cours)
 //   - GET /api/marches/dashboard
 //   - GET /api/stock/engins
 //   - GET /api/alertes/summary, GET /api/alertes
@@ -25,6 +25,7 @@ import { fr } from 'date-fns/locale';
 import { fmt } from '@/lib/utils';
 import { useAuthStore } from '@/lib/store';
 import { Card, CardHeader, KpiCard, Badge, EmptyState, Loading, Table } from '@/components/ui';
+import { MarcheStatutBadge } from '@/components/marches/MarcheStatutBadge';
 import type { TableColumn } from '@/components/ui/Table';
 
 const PEUT_VOIR_TRESORERIE = ['admin', 'directeur', 'chef_projet', 'ingenieur', 'comptable'];
@@ -34,9 +35,9 @@ const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl
 const apiFetch = (url: string) =>
   fetch(`${API}/api${url}`, { headers: { Authorization: `Bearer ${getToken()}` } }).then((r) => r.json());
 
-type Projet = {
-  id: string; code_projet: string; nom: string; statut: string;
-  budget_total: number; avancement_global: number;
+type MarcheEnCours = {
+  id: string; numero_marche: string; objet: string; statut: string;
+  montant_initial: number; avancement_physique: number;
 };
 type Alerte = {
   id: string; niveau: 'info' | 'warning' | 'critique';
@@ -54,19 +55,14 @@ const NIVEAU_BORDER: Record<string, string> = {
   warning:  'border-l-yellow-400',
   critique: 'border-l-red-400',
 };
-const STATUT_PROJET_COLOR: Record<string, string> = {
-  nouveau:  'bg-blue-100 text-blue-700',
-  en_cours: 'bg-emerald-100 text-emerald-700',
-  annule:   'bg-red-100 text-red-700',
-};
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const peutVoirTresorerie = PEUT_VOIR_TRESORERIE.includes(user?.role || '');
 
-  const { data: projetsData, isLoading: loadingProjets } = useQuery({
-    queryKey: ['dashboard-projets-en-cours'],
-    queryFn: () => apiFetch('/projets?statut=en_cours&limit=50'),
+  const { data: marchesEnCoursData, isLoading: loadingMarchesEnCours } = useQuery({
+    queryKey: ['dashboard-marches-en-cours'],
+    queryFn: () => apiFetch('/marches?statut=en_cours&limit=50'),
   });
 
   const { data: marchesDash, isLoading: loadingMarches } = useQuery({
@@ -103,12 +99,11 @@ export default function DashboardPage() {
     refetchInterval: 60000,
   });
 
-  if (loadingMarches || loadingProjets) return <Loading label="Chargement du tableau de bord..." />;
+  if (loadingMarches || loadingMarchesEnCours) return <Loading label="Chargement du tableau de bord..." />;
   if (!marchesDash) return null;
 
   const { stats } = marchesDash;
-  const projets: Projet[] = projetsData?.data || [];
-  const totalProjetsEnCours = projetsData?.pagination?.total ?? projets.length;
+  const marchesEnCours: MarcheEnCours[] = marchesEnCoursData?.data || [];
   const engins: any[] = enginsData || [];
   const enginsDisponibles = engins.filter((e) => !['maintenance', 'en_panne'].includes(e.statut)).length;
   const totalActives = alertesSummary?.total_actives ? parseInt(alertesSummary.total_actives, 10) : 0;
@@ -116,7 +111,7 @@ export default function DashboardPage() {
   const dateLabel = format(new Date(), 'EEEE d MMMM yyyy', { locale: fr });
 
   const kpis = [
-    { label: 'Projets',  value: totalProjetsEnCours,   icon: FolderKanban,  color: 'bg-blue-500',  sub: 'En cours' },
+    { label: 'Marchés en cours', value: stats.en_cours, icon: FolderKanban,  color: 'bg-blue-500',  sub: 'En cours' },
     { label: 'Marchés',  value: stats.total,           icon: FileText,      color: 'bg-brand-500', sub: fmt.currency(stats.montant_total) },
     { label: 'Engins',   value: engins.length,         icon: Truck,         color: 'bg-slate-500', sub: `${enginsDisponibles} disponible(s)` },
     { label: 'Alertes',  value: totalActives,          icon: AlertTriangle, color: 'bg-rose-500',  sub: `${totalCritiques} critique(s)` },
@@ -127,23 +122,21 @@ export default function DashboardPage() {
     }] : []),
   ];
 
-  const columns: TableColumn<Projet>[] = [
-    { key: 'code_projet', header: 'Code', render: (p) => <span className="font-mono text-xs text-gray-500">{p.code_projet}</span> },
-    { key: 'nom', header: 'Nom', render: (p) => (
-      <Link href={`/projets/${p.id}`} className="font-medium text-gray-800 hover:text-brand-600">{p.nom}</Link>
+  const columns: TableColumn<MarcheEnCours>[] = [
+    { key: 'numero_marche', header: 'N° Marché', render: (m) => (
+      <Link href={`/marches/${m.id}`} className="font-mono text-sm font-medium text-gray-800 hover:text-brand-600">{m.numero_marche}</Link>
     ) },
-    { key: 'avancement', header: 'Avancement', render: (p) => (
+    { key: 'objet', header: 'Objet', render: (m) => <span className="truncate max-w-[220px] block text-gray-700">{m.objet}</span> },
+    { key: 'avancement', header: 'Avancement', render: (m) => (
       <div className="flex items-center gap-2 w-32">
         <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-          <div className="bg-brand-500 h-full rounded-full" style={{ width: `${p.avancement_global || 0}%` }} />
+          <div className="bg-brand-500 h-full rounded-full" style={{ width: `${m.avancement_physique || 0}%` }} />
         </div>
-        <span className="text-xs text-gray-500 w-9 text-right">{p.avancement_global || 0}%</span>
+        <span className="text-xs text-gray-500 w-9 text-right">{m.avancement_physique || 0}%</span>
       </div>
     ) },
-    { key: 'budget_total', header: 'Budget', align: 'right', render: (p) => fmt.currency(p.budget_total) },
-    { key: 'statut', header: 'Statut', render: (p) => (
-      <Badge tone="gray" className={STATUT_PROJET_COLOR[p.statut] || 'bg-gray-100 text-gray-700'}>{p.statut}</Badge>
-    ) },
+    { key: 'montant_initial', header: 'Montant', align: 'right', render: (m) => fmt.currency(m.montant_initial) },
+    { key: 'statut', header: 'Statut', render: (m) => <MarcheStatutBadge statut={m.statut} /> },
   ];
 
   return (
@@ -203,13 +196,13 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* 4. Tableau des projets en cours */}
+      {/* 4. Tableau des marchés en cours */}
       <Card padded={false}>
-        <CardHeader title="Projets en cours" action={<Link href="/projets" className="text-xs text-brand-600 hover:underline">Tout voir</Link>} />
-        {!loadingProjets && !projets.length ? (
-          <EmptyState icon={FolderKanban} title="Aucun projet en cours" />
+        <CardHeader title="Marchés en cours" action={<Link href="/marches" className="text-xs text-brand-600 hover:underline">Tout voir</Link>} />
+        {!loadingMarchesEnCours && !marchesEnCours.length ? (
+          <EmptyState icon={FolderKanban} title="Aucun marché en cours" />
         ) : (
-          <Table<Projet> columns={columns} data={projets} rowKey={(p) => p.id} loading={loadingProjets} emptyMessage="Aucun projet en cours" />
+          <Table<MarcheEnCours> columns={columns} data={marchesEnCours} rowKey={(m) => m.id} loading={loadingMarchesEnCours} emptyMessage="Aucun marché en cours" />
         )}
       </Card>
     </div>

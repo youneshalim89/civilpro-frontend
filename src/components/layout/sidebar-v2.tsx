@@ -1,11 +1,14 @@
 // src/components/layout/sidebar-v2.tsx — Sidebar CivilPro V2 (Chantier UI-1 : sections dépliables)
 //
 // Structure validée : Tableau de bord (racine) puis 3 sections — GESTION
-// (Projets, Marchés + sous-menu Commandes/Situations/Factures, Finance et
+// (Marchés + sous-menu Commandes/Situations/Factures, Finance et
 // IA grisés "Bientôt", Parc Matériel, Stock, Documents), INTELLIGENCE
 // (IA CivilPro), ADMINISTRATION (Alertes, Notifications). Les anciens liens
 // Chantier/Utilisateurs/Paramètres ont été retirés : aucune page réelle ne
 // leur correspond (vérifié en direct, 404 confirmé sur les 3 routes).
+// Chantier Fusion-3 : entrée "Projets" retirée de la navigation — le marché
+// est désormais le seul concept visible, /api/projets reste consommé en
+// interne (TresorerieService, création auto du projet "coquille").
 //
 // Un groupe (ex. "Marchés") s'auto-déplie dès que la route active lui
 // correspond ou correspond à l'un de ses enfants sémantiques, sans jamais
@@ -21,7 +24,7 @@ import {
   LayoutDashboard, FileText, ShoppingCart, Receipt, BarChart3,
   Package, FolderOpen, Users, Bell, Settings, LogOut,
   Building2, ChevronRight, ChevronLeft, ChevronDown, AlertTriangle,
-  FolderKanban, Truck, Sparkles, Wallet,
+  Truck, Sparkles, Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore, useUiStore } from '@/lib/store';
@@ -42,7 +45,6 @@ const SECTIONS: NavSection[] = [
   {
     title: 'Gestion',
     items: [
-      { kind: 'link',  label: 'Projets',       href: '/projets',       icon: FolderKanban },
       {
         kind: 'group', label: 'Marchés', href: '/marches', icon: FileText,
         children: [

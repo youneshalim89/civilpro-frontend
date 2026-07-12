@@ -4,7 +4,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { marchesService, projetsService, type ProjetLite } from '@/lib/api';
+import { marchesService } from '@/lib/api';
 import { STATUTS_MARCHE } from '@/lib/utils';
 import { Card, Input, Button } from '@/components/ui';
 import NumberInput from '@/components/NumberInput';
@@ -19,11 +19,6 @@ export default function ModifierMarchePage() {
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [form, setForm] = useState<any>({});
-  const [projets, setProjets] = useState<ProjetLite[]>([]);
-
-  useEffect(() => {
-    projetsService.list().then(r => setProjets(r.data.data || [])).catch(() => {});
-  }, []);
 
   useEffect(() => {
     marchesService.get(id).then(r => {
@@ -40,7 +35,6 @@ export default function ModifierMarchePage() {
         taux_retenue_garantie:   Number(m.taux_retenue_garantie) || 7,
         statut:                  m.statut || 'en_cours',
         avancement_physique:     Number(m.avancement_physique) || 0,
-        projet_id:               m.projet_id || '',
       });
     }).catch(() => toast.error('Marché introuvable'))
       .finally(() => setLoading(false));
@@ -60,7 +54,7 @@ export default function ModifierMarchePage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await marchesService.update(id, { ...form, projet_id: form.projet_id || null });
+      await marchesService.update(id, form);
       toast.success('Marché mis à jour');
       router.push(`/marches/${id}`);
     } catch (err: any) {
@@ -101,15 +95,6 @@ export default function ModifierMarchePage() {
               <select id="marche-statut" className="input w-full" value={form.statut || ''} onChange={set('statut')}>
                 {STATUTS.map(s => (
                   <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label" htmlFor="marche-projet">Projet lié</label>
-              <select id="marche-projet" className="input w-full" value={form.projet_id || ''} onChange={set('projet_id')}>
-                <option value="">Aucun projet</option>
-                {projets.map(p => (
-                  <option key={p.id} value={p.id}>{p.code_projet} — {p.nom}</option>
                 ))}
               </select>
             </div>
