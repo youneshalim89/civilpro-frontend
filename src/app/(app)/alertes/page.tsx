@@ -26,6 +26,13 @@ type Alerte = {
   created_at: string;
 };
 
+// Chantier Fusion-4 : libellé d'affichage du module source (données réelles
+// de `alertes.source_module`, jamais renommées en base) — "projets" reste la
+// valeur stockée, seul l'affichage devient "Marchés".
+const SOURCE_MODULE_LABEL: Record<string, string> = {
+  projets: 'Marchés',
+};
+
 const NIVEAU_COLOR: Record<string, string> = {
   info:     'bg-blue-100 text-blue-700',
   warning:  'bg-yellow-100 text-yellow-700',
@@ -195,7 +202,7 @@ export default function AlertesPage() {
                       </p>
                       <span className={`badge ${NIVEAU_COLOR[a.niveau] || 'bg-gray-100 text-gray-700'}`}>{a.niveau}</span>
                       {a.source_module && (
-                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{a.source_module}</span>
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{SOURCE_MODULE_LABEL[a.source_module] || a.source_module}</span>
                       )}
                     </div>
                     {a.message && <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{a.message}</p>}

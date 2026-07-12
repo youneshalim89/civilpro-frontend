@@ -67,7 +67,7 @@ export default function MarchesPage() {
       render: (m) => <span className="text-gray-600">{m.maitre_ouvrage}</span>,
     },
     {
-      key: 'projet_lie', header: 'Projet lié',
+      key: 'projet_lie', header: 'Marché lié',
       render: (m) => {
         const marcheLie = m.projet_id ? marches.find(autre => autre.id !== m.id && autre.projet_id === m.projet_id) : undefined;
         return marcheLie ? (

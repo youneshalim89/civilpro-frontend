@@ -134,7 +134,7 @@ export default function ParcMaterielPage() {
     }).then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess: () => {
       invalidateEngins();
-      toast.success('Engin affecté au projet');
+      toast.success('Engin affecté au marché');
       setAffectationEngin(null); setProjetChoisi('');
     },
     onError: (err: any) => toast.error(err.message || "Erreur lors de l'affectation"),
@@ -143,7 +143,7 @@ export default function ParcMaterielPage() {
   const libererMut = useMutation({
     mutationFn: (engin: Engin) => apiFetch(`/stock/engins/${engin.id}/liberer`, { method: 'POST' })
       .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
-    onSuccess: () => { invalidateEngins(); toast.success('Engin libéré du projet'); },
+    onSuccess: () => { invalidateEngins(); toast.success('Engin libéré du marché'); },
     onError: (err: any) => toast.error(err.message || 'Erreur lors de la libération'),
   });
 
@@ -183,7 +183,7 @@ export default function ParcMaterielPage() {
 
   const handleExportCSV = () => {
     exportCSV('ParcMateriel.csv',
-      ['Désignation', 'Code', 'Catégorie', 'Immatriculation', 'Statut', 'Projet affecté', 'Maintenances actives'],
+      ['Désignation', 'Code', 'Catégorie', 'Immatriculation', 'Statut', 'Marché affecté', 'Maintenances actives'],
       filtered.map(e => [e.designation, e.code || '', e.categorie_nom || '', e.immatriculation || '', e.statut, e.projet_nom || 'Non affecté', e.maintenances_actives]));
   };
 
@@ -201,7 +201,7 @@ export default function ParcMaterielPage() {
         {STATUT_ENGIN_LABEL[e.statut] || e.statut}
       </Badge>
     ) },
-    { key: 'projet', header: 'Projet affecté', render: e => e.projet_nom
+    { key: 'projet', header: 'Marché affecté', render: e => e.projet_nom
       ? <span className="text-sm text-gray-700 flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-gray-400" />{e.projet_nom}</span>
       : <span className="text-xs text-gray-400 italic">Non affecté</span>,
     },
@@ -327,7 +327,7 @@ export default function ParcMaterielPage() {
           {types.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
         <select className="input text-sm w-56" value={projetFiltre} onChange={e => setProjetFiltre(e.target.value)}>
-          <option value="">Tous les projets</option>
+          <option value="">Tous les marchés</option>
           {projets.map(p => <option key={p.id} value={p.id}>{p.code_projet} — {p.nom}</option>)}
         </select>
       </Card>
@@ -353,9 +353,9 @@ export default function ParcMaterielPage() {
         title={affectationEngin ? `Affecter — ${affectationEngin.designation}` : ''}>
         <div className="space-y-4">
           <div>
-            <label className="label">Projet *</label>
+            <label className="label">Marché *</label>
             <select className="input" value={projetChoisi} onChange={e => setProjetChoisi(e.target.value)}>
-              <option value="">Sélectionner un projet</option>
+              <option value="">Sélectionner un marché</option>
               {projets.map(p => <option key={p.id} value={p.id}>{p.code_projet} — {p.nom}</option>)}
             </select>
           </div>

@@ -322,13 +322,13 @@ export default function MarcheDetailPage() {
           {/* Identité */}
           <Card className="col-span-2">
             <button onClick={() => setShowInfos(v => !v)} className="w-full flex items-center justify-between">
-              <h3 className="font-semibold text-gray-800">Informations générales du projet</h3>
+              <h3 className="font-semibold text-gray-800">Informations générales</h3>
               <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showInfos ? 'rotate-180' : ''}`} />
             </button>
             {showInfos && (
               <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm mt-4">
                 <InfoRow label="Maître d'ouvrage"         value={marche.maitre_ouvrage} />
-                <InfoRow label="Projet lié"                value={marche.projet_id ? `${marche.projet_code || ''} ${marche.projet_nom ? '— ' + marche.projet_nom : ''}`.trim() : 'Aucun'} />
+                <InfoRow label="Rattachement"              value={marche.projet_id ? `${marche.projet_code || ''} ${marche.projet_nom ? '— ' + marche.projet_nom : ''}`.trim() : 'Aucun'} />
                 <InfoRow label="Entreprise attributaire"  value={marche.entreprise_attributaire} />
                 <InfoRow label="Chef de marché"           value={marche.chef_marche_nom || '—'} />
                 <InfoRow label="Date commencement"        value={fmt.date(marche.date_commencement)} />
@@ -392,7 +392,7 @@ export default function MarcheDetailPage() {
                     <Link href={`/marches/${m.id}`} className="font-medium underline hover:text-blue-900">{m.numero_marche}</Link>
                   </span>
                 ))}
-                {' '}— même projet, ces chiffres ne sont pas propres à ce marché.
+                {' '}— rattachement commun, ces chiffres ne sont pas propres à ce marché.
               </div>
             )}
 
@@ -495,7 +495,7 @@ export default function MarcheDetailPage() {
                     <Link href={`/marches/${m.id}`} className="font-medium underline hover:text-blue-900">{m.numero_marche}</Link>
                   </span>
                 ))}
-                {' '}— même projet, ces éléments ne sont pas propres à ce marché.
+                {' '}— rattachement commun, ces éléments ne sont pas propres à ce marché.
               </div>
             )}
 

@@ -59,7 +59,7 @@ export function Header() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher un marché, une facture, un projet..."
+          placeholder="Rechercher un marché, une facture..."
           className="input pl-9 bg-gray-50 border-transparent focus:bg-white"
         />
       </div>
