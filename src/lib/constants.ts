@@ -12,3 +12,14 @@ export const FONCTIONS_POINTAGE = [
   'Chef de chantier', 'Conducteur engin', 'Chauffeur', 'Manœuvre',
   'Mécanicien', 'Gardien', 'Ingénieur', 'Autre',
 ];
+
+// Tâches types des équipes de sous-traitance informelle (Chantier ST-K, mode
+// simplifié) — suggestions de saisie, modifiables/extensibles librement,
+// pas une liste fermée.
+export const TACHES_TYPES_SOUS_TRAITANCE = [
+  { designation: 'Maçonnerie gabion', unite: 'm³' },
+  { designation: 'Fossé bétonné', unite: 'ml' },
+  { designation: 'Accotement bétonné', unite: 'ml' },
+  { designation: 'Seguia', unite: 'ml' },
+  { designation: 'Maçonnerie de pierre', unite: 'm³' },
+];

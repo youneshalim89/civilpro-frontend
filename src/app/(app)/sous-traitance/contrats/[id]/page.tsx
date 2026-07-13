@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, Pencil, FileSpreadsheet, ClipboardCheck, Banknote, Wallet } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Pencil, FileSpreadsheet, ClipboardCheck, Banknote, Wallet, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fmt } from '@/lib/utils';
 import { Card, CardHeader, Table, Badge, Button, Modal, StatCard, EmptyState, Loading } from '@/components/ui';
@@ -17,7 +17,7 @@ const apiFetch = (url: string, opts?: RequestInit) =>
   fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
 type Contrat = {
-  id: string; numero_contrat: string; objet: string; statut: string;
+  id: string; numero_contrat: string; objet: string; statut: string; type_engagement: string;
   montant_ht: number; taux_tva: number; montant_ttc: number;
   date_debut: string | null; date_fin_prevue: string | null; delai_jours: number | null;
   conditions_paiement: string | null; taux_retenue_garantie: number; taux_avance: number;
@@ -25,7 +25,7 @@ type Contrat = {
   numero_marche: string | null; marche_objet: string | null;
   montant_bordereau: number; montant_paye_total: number;
   montant_avances_total: number; montant_avances_recuperees: number;
-  montant_realise_cumule: number; nb_attachements: number;
+  montant_realise_cumule: number; nb_attachements: number; solde_compte_courant: number;
 };
 
 type LigneBordereau = {
@@ -41,7 +41,7 @@ type Attachement = {
 
 type Avance = {
   id: string; montant: number; date_versement: string; mode_paiement: string | null;
-  reference: string | null; montant_recupere: number; statut: string;
+  reference: string | null; motif: string | null; montant_recupere: number; statut: string;
 };
 type Paiement = {
   id: string; montant_du: number; montant_paye: number; date_paiement: string | null;
@@ -94,7 +94,7 @@ export default function ContratSousTraitancePage() {
     periode_debut: '', periode_fin: '', quantites: {},
   });
   const [avanceModalOuvert, setAvanceModalOuvert] = useState(false);
-  const [avanceForm, setAvanceForm] = useState({ montant: 0, date_versement: '', mode_paiement: 'virement', reference: '' });
+  const [avanceForm, setAvanceForm] = useState({ montant: 0, date_versement: '', mode_paiement: 'virement', reference: '', motif: '' });
   const [reglementCible, setReglementCible] = useState<Paiement | null>(null);
   const [reglementForm, setReglementForm] = useState({ montant_paye: 0, date_paiement: '', reference: '', mode_paiement: 'virement' });
 
@@ -189,7 +189,7 @@ export default function ContratSousTraitancePage() {
       .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess: () => {
       invalidateAll(); toast.success('Avance versée'); setAvanceModalOuvert(false);
-      setAvanceForm({ montant: 0, date_versement: '', mode_paiement: 'virement', reference: '' });
+      setAvanceForm({ montant: 0, date_versement: '', mode_paiement: 'virement', reference: '', motif: '' });
     },
     onError: (err: any) => toast.error(err.message || "Erreur lors du versement de l'avance"),
   });
@@ -213,6 +213,10 @@ export default function ContratSousTraitancePage() {
 
   if (isLoading) return <Loading label="Chargement du contrat..." />;
   if (!contrat) return null;
+
+  const estEquipe = contrat.type_engagement === 'simplifie';
+  const solde = Number(contrat.solde_compte_courant);
+  const soldeNegatif = solde < 0;
 
   const bordereauColumns: TableColumn<LigneBordereau>[] = [
     { key: 'numero_prix', header: 'N° Prix', render: l => <span className="font-mono text-xs">{l.numero_prix}</span> },
@@ -250,10 +254,11 @@ export default function ContratSousTraitancePage() {
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold text-gray-900">{contrat.numero_contrat}</h1>
               <Badge tone="gray" className={STATUT_COLOR[contrat.statut] || 'bg-gray-100 text-gray-700'}>{STATUT_LABEL[contrat.statut] || contrat.statut}</Badge>
+              {estEquipe && <Badge tone="gray" className="bg-amber-100 text-amber-700">Équipe</Badge>}
             </div>
             <p className="text-gray-600 mt-1">{contrat.objet}</p>
             <p className="text-sm text-gray-400 mt-0.5">
-              {contrat.sous_traitant_nom}
+              {estEquipe ? 'Équipe : ' : ''}{contrat.sous_traitant_nom}
               {contrat.numero_marche && <> — Marché <span className="font-medium">{contrat.numero_marche}</span></>}
             </p>
           </div>
@@ -268,10 +273,32 @@ export default function ContratSousTraitancePage() {
         <StatCard label="Payé" value={fmt.currency(contrat.montant_paye_total)} tone="green" />
       </div>
 
+      {estEquipe && (
+        <Card data-testid="compte-courant-equipe" className={soldeNegatif ? 'border-red-300 bg-red-50' : 'border-green-300 bg-green-50'}>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              {soldeNegatif ? <AlertTriangle className="w-8 h-8 text-red-500" /> : <CheckCircle2 className="w-8 h-8 text-green-600" />}
+              <div>
+                <h3 className="font-semibold text-gray-800">Compte courant équipe</h3>
+                <p className="text-xs text-gray-500">
+                  Réalisé cumulé {fmt.currency(contrat.montant_realise_cumule)} − Avances versées {fmt.currency(contrat.montant_avances_total)}
+                </p>
+              </div>
+            </div>
+            <div className="text-right" data-testid="solde-compte-courant">
+              <p className={`text-2xl font-bold ${soldeNegatif ? 'text-red-600' : 'text-green-700'}`}>{fmt.currency(Math.abs(solde))}</p>
+              <p className={`text-sm font-medium ${soldeNegatif ? 'text-red-600' : 'text-green-700'}`}>
+                {soldeNegatif ? 'Trop-perçu — à régulariser' : 'Reste à payer'}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <Card>
         <h3 className="font-semibold text-gray-800 mb-4">Informations générales</h3>
         <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-3 text-sm">
-          <div><p className="text-gray-500">Sous-traitant</p><p className="font-medium">{contrat.sous_traitant_nom}</p></div>
+          <div><p className="text-gray-500">{estEquipe ? 'Équipe / Chef d\'équipe' : 'Sous-traitant'}</p><p className="font-medium">{contrat.sous_traitant_nom}</p></div>
           <div><p className="text-gray-500">ICE</p><p className="font-medium">{contrat.sous_traitant_ice || '—'}</p></div>
           <div><p className="text-gray-500">Contact</p><p className="font-medium">{contrat.sous_traitant_contact || '—'}</p></div>
           <div><p className="text-gray-500">Date début</p><p className="font-medium">{contrat.date_debut ? fmt.date(contrat.date_debut) : '—'}</p></div>
@@ -385,7 +412,7 @@ export default function ContratSousTraitancePage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <Card padded={false}>
-          <CardHeader title="Avances" action={
+          <CardHeader title={estEquipe ? 'Avances libres' : 'Avances'} action={
             <Button size="sm" variant="secondary" icon={<Plus className="w-3.5 h-3.5" />}
               data-testid="ouvrir-versement-avance" onClick={() => setAvanceModalOuvert(true)}>Verser une avance</Button>
           } />
@@ -400,6 +427,7 @@ export default function ContratSousTraitancePage() {
                     <div>
                       <p className="font-medium text-gray-800">{fmt.currency(a.montant)} — {fmt.date(a.date_versement)}</p>
                       <p className="text-xs text-gray-400">{a.mode_paiement ? MODE_PAIEMENT_LABEL[a.mode_paiement] : '—'} {a.reference ? `· ${a.reference}` : ''}</p>
+                      {a.motif && <p className="text-xs text-gray-400 italic">{a.motif}</p>}
                     </div>
                     <div className="text-right">
                       <Badge tone="gray" className={a.statut === 'soldee' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}>
@@ -474,6 +502,11 @@ export default function ContratSousTraitancePage() {
                 onChange={e => setAvanceForm(f => ({ ...f, reference: e.target.value }))} />
             </div>
           </div>
+          <div>
+            <label className="label">Motif (optionnel)</label>
+            <input className="input" data-testid="avance-form-motif" value={avanceForm.motif}
+              onChange={e => setAvanceForm(f => ({ ...f, motif: e.target.value }))} placeholder="Ex: paie ouvriers semaine du 6 juillet" />
+          </div>
         </div>
         <div className="flex gap-3 mt-6">
           <Button data-testid="confirmer-avance" onClick={() => verserAvanceMut.mutate()} loading={verserAvanceMut.isPending}
@@ -534,24 +567,24 @@ export default function ContratSousTraitancePage() {
             </div>
             <div>
               <label className="label">Unité *</label>
-              <input className="input" value={ligneForm.unite}
+              <input className="input" data-testid="ligne-bpu-unite" value={ligneForm.unite}
                 onChange={e => setLigneForm(f => ({ ...f, unite: e.target.value }))} placeholder="Ex: m², ml, u" />
             </div>
           </div>
           <div>
             <label className="label">Désignation *</label>
-            <input className="input" value={ligneForm.designation}
+            <input className="input" data-testid="ligne-bpu-designation" value={ligneForm.designation}
               onChange={e => setLigneForm(f => ({ ...f, designation: e.target.value }))} placeholder="Ex: Étanchéité toiture terrasse" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Quantité prévue *</label>
-              <input type="number" className="input" value={ligneForm.quantite_prevue}
+              <input type="number" className="input" data-testid="ligne-bpu-quantite" value={ligneForm.quantite_prevue}
                 onChange={e => setLigneForm(f => ({ ...f, quantite_prevue: parseFloat(e.target.value) || 0 }))} />
             </div>
             <div>
               <label className="label">Prix unitaire (MAD) *</label>
-              <input type="number" className="input" value={ligneForm.prix_unitaire}
+              <input type="number" className="input" data-testid="ligne-bpu-prix" value={ligneForm.prix_unitaire}
                 onChange={e => setLigneForm(f => ({ ...f, prix_unitaire: parseFloat(e.target.value) || 0 }))} />
             </div>
           </div>
