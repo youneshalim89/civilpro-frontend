@@ -1,11 +1,11 @@
 'use client';
 // src/app/(app)/sous-traitance/contrats/[id]/page.tsx — Fiche contrat de sous-traitance
-// ST-C : en-tête + bordereau (BPU). ST-D ajoutera les attachements, ST-E les avances/paiements.
+// ST-C : en-tête + bordereau (BPU). ST-D : attachements (décompte cumulatif). ST-E ajoutera avances/paiements.
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, Pencil, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Pencil, FileSpreadsheet, ClipboardCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fmt } from '@/lib/utils';
 import { Card, CardHeader, Table, Badge, Button, Modal, StatCard, EmptyState, Loading } from '@/components/ui';
@@ -25,11 +25,33 @@ type Contrat = {
   numero_marche: string | null; marche_objet: string | null;
   montant_bordereau: number; montant_paye_total: number;
   montant_avances_total: number; montant_avances_recuperees: number;
+  montant_realise_cumule: number; nb_attachements: number;
 };
 
 type LigneBordereau = {
   id: string; numero_prix: string; designation: string; unite: string;
   quantite_prevue: number; prix_unitaire: number; montant: number;
+};
+
+type Attachement = {
+  id: string; numero_attachement: number; periode_debut: string; periode_fin: string;
+  montant_brut: number; retenue_garantie: number; avances_a_recuperer: number; montant_net: number;
+  statut: string;
+};
+
+const ATT_STATUT_LABEL: Record<string, string> = {
+  en_cours: 'En cours', soumis: 'Soumis', valide_technique: 'Validé technique', approuve: 'Approuvé', paye: 'Payé', rejete: 'Rejeté',
+};
+const ATT_STATUT_COLOR: Record<string, string> = {
+  en_cours: 'bg-gray-100 text-gray-600', soumis: 'bg-blue-100 text-blue-700', valide_technique: 'bg-purple-100 text-purple-700',
+  approuve: 'bg-green-100 text-green-700', paye: 'bg-green-100 text-green-700', rejete: 'bg-red-100 text-red-700',
+};
+// Transition suivante proposée pour chaque statut (workflow linéaire, rejet possible depuis soumis/valide_technique)
+const ATT_STATUT_SUIVANT: Record<string, string | null> = {
+  en_cours: 'soumis', soumis: 'valide_technique', valide_technique: 'approuve', approuve: null, paye: null, rejete: null,
+};
+const ATT_STATUT_SUIVANT_LABEL: Record<string, string> = {
+  soumis: 'Soumettre', valide_technique: 'Valider (technique)', approuve: 'Approuver',
 };
 
 const STATUT_LABEL: Record<string, string> = {
@@ -52,6 +74,10 @@ export default function ContratSousTraitancePage() {
   const [ligneModalOuvert, setLigneModalOuvert] = useState(false);
   const [ligneEditee, setLigneEditee] = useState<LigneBordereau | null>(null);
   const [ligneForm, setLigneForm] = useState(emptyLigneForm);
+  const [attModalOuvert, setAttModalOuvert] = useState(false);
+  const [attForm, setAttForm] = useState<{ periode_debut: string; periode_fin: string; quantites: Record<string, number> }>({
+    periode_debut: '', periode_fin: '', quantites: {},
+  });
 
   const { data: contrat, isLoading } = useQuery<Contrat>({
     queryKey: ['contrat-st', id],
@@ -64,10 +90,17 @@ export default function ContratSousTraitancePage() {
   });
   const bordereau: LigneBordereau[] = bordereauData || [];
 
+  const { data: attachementsData, isLoading: loadingAttachements } = useQuery({
+    queryKey: ['attachements-st', id],
+    queryFn: () => apiFetch(`/contrats-sous-traitance/${id}/attachements`).then(r => r.data || []),
+  });
+  const attachements: Attachement[] = attachementsData || [];
+
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['bordereau-st', id] });
     qc.invalidateQueries({ queryKey: ['contrat-st', id] });
     qc.invalidateQueries({ queryKey: ['contrats-st'] });
+    qc.invalidateQueries({ queryKey: ['attachements-st', id] });
   };
 
   const creerLigneMut = useMutation({
@@ -89,6 +122,33 @@ export default function ContratSousTraitancePage() {
       .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess: () => { invalidateAll(); toast.success('Ligne supprimée'); },
     onError: (err: any) => toast.error(err.message || 'Erreur lors de la suppression'),
+  });
+
+  const creerAttachementMut = useMutation({
+    mutationFn: () => {
+      const lignes = bordereau
+        .map(l => ({ bordereau_id: l.id, quantite_periode: attForm.quantites[l.id] || 0 }))
+        .filter(l => l.quantite_periode > 0);
+      return apiFetch(`/contrats-sous-traitance/${id}/attachements`, {
+        method: 'POST',
+        body: JSON.stringify({ periode_debut: attForm.periode_debut, periode_fin: attForm.periode_fin, lignes }),
+      }).then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; });
+    },
+    onSuccess: () => {
+      invalidateAll();
+      toast.success('Attachement créé');
+      setAttModalOuvert(false);
+      setAttForm({ periode_debut: '', periode_fin: '', quantites: {} });
+    },
+    onError: (err: any) => toast.error(err.message || "Erreur lors de la création de l'attachement"),
+  });
+
+  const changerStatutAttMut = useMutation({
+    mutationFn: ({ attId, statut }: { attId: string; statut: string }) =>
+      apiFetch(`/contrats-sous-traitance/${id}/attachements/${attId}/statut`, { method: 'PATCH', body: JSON.stringify({ statut }) })
+        .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
+    onSuccess: () => { invalidateAll(); toast.success('Statut mis à jour'); },
+    onError: (err: any) => toast.error(err.message || 'Erreur lors du changement de statut'),
   });
 
   const ouvrirCreationLigne = () => { setLigneEditee(null); setLigneForm(emptyLigneForm); setLigneModalOuvert(true); };
@@ -148,9 +208,10 @@ export default function ContratSousTraitancePage() {
       </div>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label="Montant HT" value={fmt.currency(contrat.montant_ht)} tone="blue" />
         <StatCard label="Montant TTC" value={fmt.currency(contrat.montant_ttc)} tone="blue" />
         <StatCard label="Total bordereau" value={fmt.currency(contrat.montant_bordereau)} tone="gray" />
+        <StatCard label="Réalisé cumulé" value={fmt.currency(contrat.montant_realise_cumule)}
+          tone="gray" description={contrat.montant_bordereau > 0 ? `${fmt.pct((contrat.montant_realise_cumule / contrat.montant_bordereau) * 100)} du bordereau` : undefined} />
         <StatCard label="Payé" value={fmt.currency(contrat.montant_paye_total)} tone="green" />
       </div>
 
@@ -180,6 +241,94 @@ export default function ContratSousTraitancePage() {
           <Table<LigneBordereau> columns={bordereauColumns} data={bordereau} rowKey={l => l.id} emptyMessage="Aucune ligne" footer={bordereauFooter} />
         )}
       </Card>
+
+      <Card padded={false}>
+        <CardHeader title="Attachements (décompte cumulatif)" action={
+          <Button size="sm" variant="secondary" icon={<Plus className="w-3.5 h-3.5" />} disabled={bordereau.length === 0}
+            data-testid="ouvrir-creation-attachement"
+            onClick={() => { setAttForm({ periode_debut: '', periode_fin: '', quantites: {} }); setAttModalOuvert(true); }}>
+            Nouvel attachement
+          </Button>
+        } />
+        {loadingAttachements ? <Loading label="Chargement..." /> : attachements.length === 0 ? (
+          <EmptyState icon={ClipboardCheck} title="Aucun attachement" description={bordereau.length === 0 ? "Ajoutez d'abord des lignes au bordereau." : 'Saisissez les quantités réalisées de la première période.'} />
+        ) : (
+          <Table<Attachement>
+            columns={[
+              { key: 'numero_attachement', header: 'N°', render: a => <span className="font-mono text-sm">#{a.numero_attachement}</span> },
+              { key: 'periode', header: 'Période', render: a => `${fmt.date(a.periode_debut)} — ${fmt.date(a.periode_fin)}` },
+              { key: 'montant_brut', header: 'Montant brut', align: 'right', render: a => fmt.currency(a.montant_brut) },
+              { key: 'retenue_garantie', header: 'Retenue garantie', align: 'right', render: a => fmt.currency(a.retenue_garantie) },
+              { key: 'avances_a_recuperer', header: 'Avance récupérée', align: 'right', render: a => fmt.currency(a.avances_a_recuperer) },
+              { key: 'montant_net', header: 'Net à payer', align: 'right', render: a => <span className="font-semibold">{fmt.currency(a.montant_net)}</span> },
+              { key: 'statut', header: 'Statut', render: a => <Badge tone="gray" className={ATT_STATUT_COLOR[a.statut] || 'bg-gray-100 text-gray-700'}>{ATT_STATUT_LABEL[a.statut] || a.statut}</Badge> },
+              { key: 'actions', header: 'Actions', render: a => {
+                const suivant = ATT_STATUT_SUIVANT[a.statut];
+                return (
+                  <div className="flex items-center gap-1.5">
+                    {suivant && (
+                      <Button size="sm" variant="secondary" data-testid={`avancer-statut-att-${a.id}`}
+                        loading={changerStatutAttMut.isPending} onClick={() => changerStatutAttMut.mutate({ attId: a.id, statut: suivant })}>
+                        {ATT_STATUT_SUIVANT_LABEL[suivant]}
+                      </Button>
+                    )}
+                    {(a.statut === 'soumis' || a.statut === 'valide_technique') && (
+                      <Button size="sm" variant="ghost" data-testid={`rejeter-att-${a.id}`}
+                        onClick={() => changerStatutAttMut.mutate({ attId: a.id, statut: 'rejete' })}>Rejeter</Button>
+                    )}
+                  </div>
+                );
+              } },
+            ]}
+            data={attachements} rowKey={a => a.id} emptyMessage="Aucun attachement"
+          />
+        )}
+      </Card>
+
+      <Modal open={attModalOuvert} onClose={() => setAttModalOuvert(false)} title="Nouvel attachement" maxWidth="2xl">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Période début *</label>
+              <input type="date" className="input" data-testid="att-form-periode-debut" value={attForm.periode_debut}
+                onChange={e => setAttForm(f => ({ ...f, periode_debut: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Période fin *</label>
+              <input type="date" className="input" data-testid="att-form-periode-fin" value={attForm.periode_fin}
+                onChange={e => setAttForm(f => ({ ...f, periode_fin: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <p className="label mb-2">Quantités réalisées cette période, par ligne de bordereau</p>
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {bordereau.map(l => (
+                <div key={l.id} className="flex items-center gap-3 border border-gray-200 rounded-lg px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{l.numero_prix} — {l.designation}</p>
+                    <p className="text-xs text-gray-400">Prévu : {fmt.number(l.quantite_prevue)} {l.unite} · P.U. {fmt.currency(l.prix_unitaire)}</p>
+                  </div>
+                  <input type="number" className="input w-28 text-sm" data-testid={`att-quantite-${l.id}`}
+                    value={attForm.quantites[l.id] ?? ''} placeholder="0"
+                    onChange={e => setAttForm(f => ({ ...f, quantites: { ...f.quantites, [l.id]: parseFloat(e.target.value) || 0 } }))} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <p className="text-sm text-gray-500">
+            Montant brut de la période : <strong className="text-gray-800">
+              {fmt.currency(bordereau.reduce((s, l) => s + (attForm.quantites[l.id] || 0) * Number(l.prix_unitaire), 0))}
+            </strong>
+          </p>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <Button data-testid="confirmer-attachement" onClick={() => creerAttachementMut.mutate()} loading={creerAttachementMut.isPending}
+            disabled={!attForm.periode_debut || !attForm.periode_fin || Object.values(attForm.quantites).every(q => !q)}>
+            Créer l'attachement
+          </Button>
+          <Button variant="secondary" onClick={() => setAttModalOuvert(false)}>Annuler</Button>
+        </div>
+      </Modal>
 
       <Modal open={ligneModalOuvert} onClose={() => { setLigneModalOuvert(false); setLigneEditee(null); }}
         title={ligneEditee ? `Modifier la ligne ${ligneEditee.numero_prix}` : 'Nouvelle ligne de bordereau'}>
