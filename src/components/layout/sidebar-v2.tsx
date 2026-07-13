@@ -24,7 +24,7 @@ import {
   LayoutDashboard, FileText, ShoppingCart, Receipt, BarChart3,
   Package, FolderOpen, Users, Bell, Settings, LogOut,
   Building2, ChevronRight, ChevronLeft, ChevronDown, AlertTriangle,
-  Truck, Sparkles, Wallet,
+  Truck, Sparkles, Wallet, Handshake,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore, useUiStore } from '@/lib/store';
@@ -56,6 +56,7 @@ const SECTIONS: NavSection[] = [
       { kind: 'soon',  label: 'Finance',                             icon: Wallet },
       { kind: 'link',  label: 'Parc Matériel', href: '/parc-materiel', icon: Truck },
       { kind: 'link',  label: 'Stock',         href: '/stock',        icon: Package },
+      { kind: 'link',  label: 'Sous-traitance', href: '/sous-traitance', icon: Handshake },
       { kind: 'link',  label: 'Documents',     href: '/documents',    icon: FolderOpen },
     ],
   },
