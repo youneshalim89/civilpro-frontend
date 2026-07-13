@@ -1,11 +1,11 @@
 'use client';
 // src/app/(app)/sous-traitance/contrats/[id]/page.tsx — Fiche contrat de sous-traitance
-// ST-C : en-tête + bordereau (BPU). ST-D : attachements (décompte cumulatif). ST-E ajoutera avances/paiements.
+// ST-C : en-tête + bordereau (BPU). ST-D : attachements (décompte cumulatif). ST-E : avances + paiements.
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, Pencil, FileSpreadsheet, ClipboardCheck } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Pencil, FileSpreadsheet, ClipboardCheck, Banknote, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fmt } from '@/lib/utils';
 import { Card, CardHeader, Table, Badge, Button, Modal, StatCard, EmptyState, Loading } from '@/components/ui';
@@ -38,6 +38,21 @@ type Attachement = {
   montant_brut: number; retenue_garantie: number; avances_a_recuperer: number; montant_net: number;
   statut: string;
 };
+
+type Avance = {
+  id: string; montant: number; date_versement: string; mode_paiement: string | null;
+  reference: string | null; montant_recupere: number; statut: string;
+};
+type Paiement = {
+  id: string; montant_du: number; montant_paye: number; date_paiement: string | null;
+  reference: string | null; mode_paiement: string | null; statut: string; numero_attachement: number | null;
+};
+
+const PAIEMENT_STATUT_LABEL: Record<string, string> = { impaye: 'Impayé', partiel: 'Partiel', paye: 'Payé' };
+const PAIEMENT_STATUT_COLOR: Record<string, string> = {
+  impaye: 'bg-red-100 text-red-700', partiel: 'bg-yellow-100 text-yellow-700', paye: 'bg-green-100 text-green-700',
+};
+const MODE_PAIEMENT_LABEL: Record<string, string> = { virement: 'Virement', cheque: 'Chèque', especes: 'Espèces' };
 
 const ATT_STATUT_LABEL: Record<string, string> = {
   en_cours: 'En cours', soumis: 'Soumis', valide_technique: 'Validé technique', approuve: 'Approuvé', paye: 'Payé', rejete: 'Rejeté',
@@ -78,6 +93,10 @@ export default function ContratSousTraitancePage() {
   const [attForm, setAttForm] = useState<{ periode_debut: string; periode_fin: string; quantites: Record<string, number> }>({
     periode_debut: '', periode_fin: '', quantites: {},
   });
+  const [avanceModalOuvert, setAvanceModalOuvert] = useState(false);
+  const [avanceForm, setAvanceForm] = useState({ montant: 0, date_versement: '', mode_paiement: 'virement', reference: '' });
+  const [reglementCible, setReglementCible] = useState<Paiement | null>(null);
+  const [reglementForm, setReglementForm] = useState({ montant_paye: 0, date_paiement: '', reference: '', mode_paiement: 'virement' });
 
   const { data: contrat, isLoading } = useQuery<Contrat>({
     queryKey: ['contrat-st', id],
@@ -96,11 +115,25 @@ export default function ContratSousTraitancePage() {
   });
   const attachements: Attachement[] = attachementsData || [];
 
+  const { data: avancesData, isLoading: loadingAvances } = useQuery({
+    queryKey: ['avances-st', id],
+    queryFn: () => apiFetch(`/contrats-sous-traitance/${id}/avances`).then(r => r.data || []),
+  });
+  const avances: Avance[] = avancesData || [];
+
+  const { data: paiementsData, isLoading: loadingPaiements } = useQuery({
+    queryKey: ['paiements-st', id],
+    queryFn: () => apiFetch(`/contrats-sous-traitance/${id}/paiements`).then(r => r.data || []),
+  });
+  const paiements: Paiement[] = paiementsData || [];
+
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['bordereau-st', id] });
     qc.invalidateQueries({ queryKey: ['contrat-st', id] });
     qc.invalidateQueries({ queryKey: ['contrats-st'] });
     qc.invalidateQueries({ queryKey: ['attachements-st', id] });
+    qc.invalidateQueries({ queryKey: ['avances-st', id] });
+    qc.invalidateQueries({ queryKey: ['paiements-st', id] });
   };
 
   const creerLigneMut = useMutation({
@@ -149,6 +182,26 @@ export default function ContratSousTraitancePage() {
         .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
     onSuccess: () => { invalidateAll(); toast.success('Statut mis à jour'); },
     onError: (err: any) => toast.error(err.message || 'Erreur lors du changement de statut'),
+  });
+
+  const verserAvanceMut = useMutation({
+    mutationFn: () => apiFetch(`/contrats-sous-traitance/${id}/avances`, { method: 'POST', body: JSON.stringify(avanceForm) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
+    onSuccess: () => {
+      invalidateAll(); toast.success('Avance versée'); setAvanceModalOuvert(false);
+      setAvanceForm({ montant: 0, date_versement: '', mode_paiement: 'virement', reference: '' });
+    },
+    onError: (err: any) => toast.error(err.message || "Erreur lors du versement de l'avance"),
+  });
+
+  const enregistrerReglementMut = useMutation({
+    mutationFn: () => apiFetch(`/contrats-sous-traitance/${id}/paiements/${reglementCible!.id}`, { method: 'PATCH', body: JSON.stringify(reglementForm) })
+      .then(r => { if (!r.success) throw new Error(r.message || 'Erreur'); return r; }),
+    onSuccess: () => {
+      invalidateAll(); toast.success('Règlement enregistré'); setReglementCible(null);
+      setReglementForm({ montant_paye: 0, date_paiement: '', reference: '', mode_paiement: 'virement' });
+    },
+    onError: (err: any) => toast.error(err.message || "Erreur lors de l'enregistrement du règlement"),
   });
 
   const ouvrirCreationLigne = () => { setLigneEditee(null); setLigneForm(emptyLigneForm); setLigneModalOuvert(true); };
@@ -327,6 +380,146 @@ export default function ContratSousTraitancePage() {
             Créer l'attachement
           </Button>
           <Button variant="secondary" onClick={() => setAttModalOuvert(false)}>Annuler</Button>
+        </div>
+      </Modal>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <Card padded={false}>
+          <CardHeader title="Avances" action={
+            <Button size="sm" variant="secondary" icon={<Plus className="w-3.5 h-3.5" />}
+              data-testid="ouvrir-versement-avance" onClick={() => setAvanceModalOuvert(true)}>Verser une avance</Button>
+          } />
+          {loadingAvances ? <Loading label="Chargement..." /> : avances.length === 0 ? (
+            <EmptyState icon={Wallet} title="Aucune avance versée" />
+          ) : (
+            <div className="divide-y">
+              {avances.map(a => {
+                const restant = Number(a.montant) - Number(a.montant_recupere);
+                return (
+                  <div key={a.id} className="px-5 py-3 flex items-center justify-between text-sm">
+                    <div>
+                      <p className="font-medium text-gray-800">{fmt.currency(a.montant)} — {fmt.date(a.date_versement)}</p>
+                      <p className="text-xs text-gray-400">{a.mode_paiement ? MODE_PAIEMENT_LABEL[a.mode_paiement] : '—'} {a.reference ? `· ${a.reference}` : ''}</p>
+                    </div>
+                    <div className="text-right">
+                      <Badge tone="gray" className={a.statut === 'soldee' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}>
+                        {a.statut === 'soldee' ? 'Soldée' : 'En cours'}
+                      </Badge>
+                      <p className="text-xs text-gray-400 mt-1">Restant : {fmt.currency(restant)}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        <Card padded={false}>
+          <CardHeader title="Paiements" />
+          {loadingPaiements ? <Loading label="Chargement..." /> : paiements.length === 0 ? (
+            <EmptyState icon={Banknote} title="Aucun paiement" description="Générés automatiquement à l'approbation d'un attachement." />
+          ) : (
+            <div className="divide-y">
+              {paiements.map(p => (
+                <div key={p.id} className="px-5 py-3 flex items-center justify-between text-sm" data-testid={`paiement-${p.id}`}>
+                  <div>
+                    <p className="font-medium text-gray-800">
+                      {p.numero_attachement ? `Attachement #${p.numero_attachement}` : 'Paiement'} — {fmt.currency(p.montant_du)}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Payé : {fmt.currency(p.montant_paye)} {p.date_paiement ? `· ${fmt.date(p.date_paiement)}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge tone="gray" className={PAIEMENT_STATUT_COLOR[p.statut] || 'bg-gray-100 text-gray-700'}>{PAIEMENT_STATUT_LABEL[p.statut] || p.statut}</Badge>
+                    {p.statut !== 'paye' && (
+                      <Button size="sm" variant="secondary" data-testid={`reglement-paiement-${p.id}`}
+                        onClick={() => { setReglementCible(p); setReglementForm({ montant_paye: Number(p.montant_du) - Number(p.montant_paye), date_paiement: '', reference: '', mode_paiement: 'virement' }); }}>
+                        Régler
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <Modal open={avanceModalOuvert} onClose={() => setAvanceModalOuvert(false)} title="Verser une avance">
+        <div className="space-y-4">
+          <div>
+            <label className="label">Montant (MAD) *</label>
+            <input type="number" className="input" data-testid="avance-form-montant" value={avanceForm.montant}
+              onChange={e => setAvanceForm(f => ({ ...f, montant: parseFloat(e.target.value) || 0 }))} />
+          </div>
+          <div>
+            <label className="label">Date de versement *</label>
+            <input type="date" className="input" data-testid="avance-form-date" value={avanceForm.date_versement}
+              onChange={e => setAvanceForm(f => ({ ...f, date_versement: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Mode de paiement</label>
+              <select className="input" value={avanceForm.mode_paiement}
+                onChange={e => setAvanceForm(f => ({ ...f, mode_paiement: e.target.value }))}>
+                <option value="virement">Virement</option>
+                <option value="cheque">Chèque</option>
+                <option value="especes">Espèces</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Référence</label>
+              <input className="input" value={avanceForm.reference}
+                onChange={e => setAvanceForm(f => ({ ...f, reference: e.target.value }))} />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <Button data-testid="confirmer-avance" onClick={() => verserAvanceMut.mutate()} loading={verserAvanceMut.isPending}
+            disabled={!avanceForm.montant || !avanceForm.date_versement}>
+            Verser l'avance
+          </Button>
+          <Button variant="secondary" onClick={() => setAvanceModalOuvert(false)}>Annuler</Button>
+        </div>
+      </Modal>
+
+      <Modal open={!!reglementCible} onClose={() => setReglementCible(null)}
+        title={reglementCible ? `Régler — ${fmt.currency(reglementCible.montant_du)}` : ''}>
+        <div className="space-y-4">
+          <div>
+            <label className="label">Montant réglé (MAD) *</label>
+            <input type="number" className="input" data-testid="reglement-form-montant" value={reglementForm.montant_paye}
+              onChange={e => setReglementForm(f => ({ ...f, montant_paye: parseFloat(e.target.value) || 0 }))} />
+          </div>
+          <div>
+            <label className="label">Date de paiement *</label>
+            <input type="date" className="input" data-testid="reglement-form-date" value={reglementForm.date_paiement}
+              onChange={e => setReglementForm(f => ({ ...f, date_paiement: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Mode de paiement</label>
+              <select className="input" value={reglementForm.mode_paiement}
+                onChange={e => setReglementForm(f => ({ ...f, mode_paiement: e.target.value }))}>
+                <option value="virement">Virement</option>
+                <option value="cheque">Chèque</option>
+                <option value="especes">Espèces</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Référence</label>
+              <input className="input" value={reglementForm.reference}
+                onChange={e => setReglementForm(f => ({ ...f, reference: e.target.value }))} />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <Button data-testid="confirmer-reglement" onClick={() => enregistrerReglementMut.mutate()} loading={enregistrerReglementMut.isPending}
+            disabled={!reglementForm.montant_paye || !reglementForm.date_paiement}>
+            Enregistrer le règlement
+          </Button>
+          <Button variant="secondary" onClick={() => setReglementCible(null)}>Annuler</Button>
         </div>
       </Modal>
 
