@@ -75,9 +75,9 @@ export default function SituationsPage() {
         </div>
       ),
     },
-    { key: 'montant_brut', header: 'Montant brut', align: 'right', render: (s) => fmt.currency(s.montant_brut) },
-    { key: 'retenue_garantie', header: 'Retenue G.', align: 'right', render: (s) => <span className="text-red-500">{fmt.currency(s.retenue_garantie)}</span> },
-    { key: 'montant_net', header: 'Montant net', align: 'right', render: (s) => <span className="font-semibold text-green-700">{fmt.currency(s.montant_net)}</span> },
+    { key: 'montant_brut', header: 'Montant brut', align: 'right', render: (s) => <span className="whitespace-nowrap">{fmt.currency(s.montant_brut)}</span> },
+    { key: 'retenue_garantie', header: 'Retenue G.', align: 'right', render: (s) => <span className="text-red-500 whitespace-nowrap">{fmt.currency(s.retenue_garantie)}</span> },
+    { key: 'montant_net', header: 'Montant net', align: 'right', render: (s) => <span className="font-semibold text-green-700 whitespace-nowrap">{fmt.currency(s.montant_net)}</span> },
     {
       key: 'statut', header: 'Statut',
       render: (s) => { const st = STATUTS_SITUATION[s.statut]; return <Badge className={st?.color}>{st?.label}</Badge>; },

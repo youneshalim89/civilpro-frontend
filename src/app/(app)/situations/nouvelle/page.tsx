@@ -74,6 +74,11 @@ export default function NouvelleSituationPage() {
   const retenue    = Math.min(rgPotentielle, rgRestante);
   const montantNet = montantBrut - retenue;
 
+  // TVA/TTC informatifs — taux du marché (jamais codé en dur), n'affectent pas le calcul RG/net existant
+  const tauxTva  = parseFloat(marche?.taux_tva ?? 20);
+  const montantTva  = montantBrut * (tauxTva / 100);
+  const montantTtc  = montantBrut + montantTva;
+
   // Avancement physique calculé automatiquement à partir des prestations
   const montantTotalBQ = lignes.reduce((s, l) => s + (l.quantite_prevue * l.prix_unitaire), 0);
   const montantCumuleTotalBQ = lignes.reduce((s, l) => {
@@ -192,16 +197,16 @@ export default function NouvelleSituationPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
                     <tr>
-                      <th className="table-header">Code</th>
+                      <th className="table-header whitespace-nowrap">N° prix</th>
                       <th className="table-header">Désignation</th>
-                      <th className="table-header">U.</th>
-                      <th className="table-header text-right">Qté Prévue</th>
-                      <th className="table-header text-right">Qté Cumulée avant</th>
-                      <th className="table-header text-right bg-brand-50 text-brand-700">Qté Période *</th>
-                      <th className="table-header text-right">Qté Cumulée</th>
-                      <th className="table-header text-right">P.U.</th>
-                      <th className="table-header text-right bg-green-50 text-green-700">Mt Période</th>
-                      <th className="table-header text-right">%</th>
+                      <th className="table-header whitespace-nowrap">U.</th>
+                      <th className="table-header text-right whitespace-nowrap">Qté prévue</th>
+                      <th className="table-header text-right whitespace-nowrap">Qté cumulée avant</th>
+                      <th className="table-header text-right whitespace-nowrap bg-brand-50 text-brand-700">Qté période *</th>
+                      <th className="table-header text-right whitespace-nowrap">Qté cumulée</th>
+                      <th className="table-header text-right whitespace-nowrap">P.U.</th>
+                      <th className="table-header text-right whitespace-nowrap bg-green-50 text-green-700">Prix HT</th>
+                      <th className="table-header text-right whitespace-nowrap">%</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -211,23 +216,23 @@ export default function NouvelleSituationPage() {
                       const pct       = l.quantite_prevue > 0 ? (qCumulee / l.quantite_prevue) * 100 : 0;
                       return (
                         <tr key={l.article_id} className={`hover:bg-gray-50 ${l.quantite_periode > 0 ? 'bg-green-50/30' : ''}`}>
-                          <td className="table-cell font-mono text-xs text-brand-600">{l.code_article}</td>
-                          <td className="table-cell max-w-xs"><p className="truncate">{l.designation}</p></td>
-                          <td className="table-cell text-gray-500 text-xs">{l.unite}</td>
-                          <td className="table-cell text-right text-gray-500">{fmt.number(l.quantite_prevue)}</td>
-                          <td className="table-cell text-right text-gray-500">{fmt.number(l.quantite_cumulee_avant)}</td>
-                          <td className="table-cell bg-brand-50/30">
+                          <td className="table-cell font-mono text-xs text-brand-600 whitespace-nowrap">{l.code_article}</td>
+                          <td className="table-cell max-w-xs">{l.designation}</td>
+                          <td className="table-cell text-gray-500 text-xs whitespace-nowrap">{l.unite}</td>
+                          <td className="table-cell text-right text-gray-500 whitespace-nowrap">{fmt.number(l.quantite_prevue)}</td>
+                          <td className="table-cell text-right text-gray-500 whitespace-nowrap">{fmt.number(l.quantite_cumulee_avant)}</td>
+                          <td className="table-cell bg-brand-50/30 whitespace-nowrap">
                             <NumberInput min={0}
                               className="input text-xs py-1 text-right w-28 border-brand-300"
                               value={l.quantite_periode}
                               onChange={v => setQtePeriode(i, v)} />
                           </td>
-                          <td className="table-cell text-right font-medium">{fmt.number(qCumulee)}</td>
-                          <td className="table-cell text-right text-gray-500 text-xs">{fmt.currency(l.prix_unitaire, '')}</td>
-                          <td className="table-cell text-right font-semibold text-green-700 bg-green-50/20">
+                          <td className="table-cell text-right font-medium whitespace-nowrap">{fmt.number(qCumulee)}</td>
+                          <td className="table-cell text-right text-gray-500 text-xs whitespace-nowrap">{fmt.currency(l.prix_unitaire, '')}</td>
+                          <td className="table-cell text-right font-semibold text-green-700 bg-green-50/20 whitespace-nowrap">
                             {montant > 0 ? fmt.currency(montant, '') : '—'}
                           </td>
-                          <td className="table-cell text-right">
+                          <td className="table-cell text-right whitespace-nowrap">
                             <span className={`text-xs font-medium ${pct > 100 ? 'text-red-600' : pct >= 80 ? 'text-green-600' : 'text-gray-600'}`}>
                               {pct.toFixed(1)}%
                             </span>
@@ -238,8 +243,18 @@ export default function NouvelleSituationPage() {
                   </tbody>
                   <tfoot className="border-t">
                     <tr className="bg-gray-50 font-semibold text-sm">
-                      <td colSpan={8} className="px-4 py-3 text-right text-gray-600">Montant brut période</td>
-                      <td className="px-4 py-3 text-right">{fmt.currency(montantBrut)}</td>
+                      <td colSpan={8} className="px-4 py-3 text-right text-gray-600">MONTANT BRUT (HT)</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">{fmt.currency(montantBrut)}</td>
+                      <td />
+                    </tr>
+                    <tr className="bg-gray-50/60 text-sm">
+                      <td colSpan={8} className="px-4 py-3 text-right text-gray-500">TVA ({tauxTva.toFixed(0)} %)</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap text-gray-600">{fmt.currency(montantTva)}</td>
+                      <td />
+                    </tr>
+                    <tr className="bg-gray-100 text-sm font-semibold">
+                      <td colSpan={8} className="px-4 py-3 text-right text-gray-700">TOTAL TTC</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap text-gray-800">{fmt.currency(montantTtc)}</td>
                       <td />
                     </tr>
                     <tr className="bg-red-50/50 text-sm">
@@ -249,12 +264,12 @@ export default function NouvelleSituationPage() {
                           <span className="block text-xs text-gray-400">Plafond déjà atteint — aucune retenue supplémentaire</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right text-red-600 font-semibold">- {fmt.currency(retenue)}</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap text-red-600 font-semibold">- {fmt.currency(retenue)}</td>
                       <td />
                     </tr>
                     <tr className="bg-brand-50 text-base font-bold">
-                      <td colSpan={8} className="px-4 py-3 text-right text-brand-700">MONTANT NET À PAYER</td>
-                      <td className="px-4 py-3 text-right text-brand-700">{fmt.currency(montantNet)}</td>
+                      <td colSpan={8} className="px-4 py-3 text-right text-brand-700">MONTANT NET À PAYER (HT)</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap text-brand-700">{fmt.currency(montantNet)}</td>
                       <td />
                     </tr>
                   </tfoot>

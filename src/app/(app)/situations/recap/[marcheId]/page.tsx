@@ -27,6 +27,11 @@ export default function SituationRecapPage() {
 
   const { marche, situations, par_article, recapitulatif: r } = data;
 
+  // TVA/TTC informatifs — taux du marché (jamais codé en dur)
+  const tauxTva    = parseFloat(marche.taux_tva ?? 20);
+  const montantTva = parseFloat(r.total_situation) * (tauxTva / 100);
+  const montantTtc = parseFloat(r.total_situation) + montantTva;
+
   // Données graphique progression
   const chartData = situations.map((s: any) => ({
     name:              `N°${s.numero_situation}`,
@@ -114,26 +119,26 @@ export default function SituationRecapPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="table-header">N°</th>
-                <th className="table-header">Type</th>
-                <th className="table-header">Période</th>
-                <th className="table-header text-right">Av. financier</th>
-                <th className="table-header text-right">Montant brut</th>
-                <th className="table-header text-right">RG</th>
-                <th className="table-header text-right">Montant net</th>
-                <th className="table-header">Statut</th>
+                <th className="table-header whitespace-nowrap">N°</th>
+                <th className="table-header whitespace-nowrap">Type</th>
+                <th className="table-header whitespace-nowrap">Période</th>
+                <th className="table-header text-right whitespace-nowrap">Av. financier</th>
+                <th className="table-header text-right whitespace-nowrap">Montant brut</th>
+                <th className="table-header text-right whitespace-nowrap">RG</th>
+                <th className="table-header text-right whitespace-nowrap">Montant net</th>
+                <th className="table-header whitespace-nowrap">Statut</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {situations.map((s: any) => (
                 <tr key={s.numero_situation} className="hover:bg-gray-50">
-                  <td className="table-cell font-bold text-brand-600">N°{s.numero_situation}</td>
-                  <td className="table-cell text-xs text-gray-500">{s.type_situation}</td>
-                  <td className="table-cell text-xs">{fmt.date(s.periode_debut)} → {fmt.date(s.periode_fin)}</td>
-                  <td className="table-cell text-right">{fmt.pct(s.avancement_financier)}</td>
-                  <td className="table-cell text-right">{fmt.currency(s.montant_brut)}</td>
-                  <td className="table-cell text-right text-red-500">{fmt.currency(s.retenue_garantie)}</td>
-                  <td className="table-cell text-right font-semibold text-green-700">{fmt.currency(s.montant_net)}</td>
+                  <td className="table-cell font-bold text-brand-600 whitespace-nowrap">N°{s.numero_situation}</td>
+                  <td className="table-cell text-xs text-gray-500 whitespace-nowrap">{s.type_situation}</td>
+                  <td className="table-cell text-xs whitespace-nowrap">{fmt.date(s.periode_debut)} → {fmt.date(s.periode_fin)}</td>
+                  <td className="table-cell text-right whitespace-nowrap">{fmt.pct(s.avancement_financier)}</td>
+                  <td className="table-cell text-right whitespace-nowrap">{fmt.currency(s.montant_brut)}</td>
+                  <td className="table-cell text-right text-red-500 whitespace-nowrap">{fmt.currency(s.retenue_garantie)}</td>
+                  <td className="table-cell text-right font-semibold text-green-700 whitespace-nowrap">{fmt.currency(s.montant_net)}</td>
                   <td className="table-cell">
                     <Badge className={STATUTS_SITUATION[s.statut]?.color}>
                       {STATUTS_SITUATION[s.statut]?.label}
@@ -142,13 +147,23 @@ export default function SituationRecapPage() {
                 </tr>
               ))}
             </tbody>
-            <tfoot className="border-t bg-brand-50 font-bold">
-              <tr>
-                <td colSpan={4} className="px-4 py-3 text-right text-brand-700">TOTAL GÉNÉRAL</td>
-                <td className="px-4 py-3 text-right text-brand-700">{fmt.currency(r.total_situation)}</td>
-                <td className="px-4 py-3 text-right text-red-600">{fmt.currency(r.total_rg)}</td>
-                <td className="px-4 py-3 text-right text-emerald-700">{fmt.currency(r.total_net)}</td>
+            <tfoot className="border-t">
+              <tr className="bg-brand-50 font-bold">
+                <td colSpan={4} className="px-4 py-3 text-right text-brand-700">TOTAL GÉNÉRAL (HT)</td>
+                <td className="px-4 py-3 text-right text-brand-700 whitespace-nowrap">{fmt.currency(r.total_situation)}</td>
+                <td className="px-4 py-3 text-right text-red-600 whitespace-nowrap">{fmt.currency(r.total_rg)}</td>
+                <td className="px-4 py-3 text-right text-emerald-700 whitespace-nowrap">{fmt.currency(r.total_net)}</td>
                 <td />
+              </tr>
+              <tr className="bg-gray-50 text-xs">
+                <td colSpan={4} className="px-4 py-2 text-right text-gray-500">TVA ({tauxTva.toFixed(0)} %)</td>
+                <td className="px-4 py-2 text-right text-gray-600 whitespace-nowrap">{fmt.currency(montantTva)}</td>
+                <td colSpan={2} />
+              </tr>
+              <tr className="bg-gray-100 text-sm font-semibold">
+                <td colSpan={4} className="px-4 py-2 text-right text-gray-700">TOTAL TTC</td>
+                <td className="px-4 py-2 text-right text-gray-800 whitespace-nowrap">{fmt.currency(montantTtc)}</td>
+                <td colSpan={2} />
               </tr>
             </tfoot>
           </table>
@@ -164,27 +179,27 @@ export default function SituationRecapPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="table-header">Code</th>
+                <th className="table-header whitespace-nowrap">N° prix</th>
                 <th className="table-header">Désignation</th>
-                <th className="table-header">U.</th>
-                <th className="table-header text-right">Qté Prévue</th>
-                <th className="table-header text-right">Qté Cumulée</th>
-                <th className="table-header text-right">Montant prévu</th>
-                <th className="table-header text-right">Montant cumulé</th>
-                <th className="table-header text-right">%</th>
+                <th className="table-header whitespace-nowrap">U.</th>
+                <th className="table-header text-right whitespace-nowrap">Qté prévue</th>
+                <th className="table-header text-right whitespace-nowrap">Qté cumulée</th>
+                <th className="table-header text-right whitespace-nowrap">Montant prévu</th>
+                <th className="table-header text-right whitespace-nowrap">Montant cumulé</th>
+                <th className="table-header text-right whitespace-nowrap">%</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {par_article.map((a: any) => (
                 <tr key={a.code_article} className="hover:bg-gray-50">
-                  <td className="table-cell font-mono text-xs text-brand-600">{a.code_article}</td>
-                  <td className="table-cell max-w-xs"><p className="truncate">{a.designation}</p></td>
-                  <td className="table-cell text-gray-500 text-xs">{a.unite}</td>
-                  <td className="table-cell text-right">{fmt.number(a.quantite_prevue)}</td>
-                  <td className="table-cell text-right font-medium">{fmt.number(a.quantite_cumulee)}</td>
-                  <td className="table-cell text-right">{fmt.currency(a.montant, '')}</td>
-                  <td className="table-cell text-right font-semibold">{fmt.currency(a.montant_cumule, '')}</td>
-                  <td className="table-cell text-right">
+                  <td className="table-cell font-mono text-xs text-brand-600 whitespace-nowrap">{a.code_article}</td>
+                  <td className="table-cell max-w-xs">{a.designation}</td>
+                  <td className="table-cell text-gray-500 text-xs whitespace-nowrap">{a.unite}</td>
+                  <td className="table-cell text-right whitespace-nowrap">{fmt.number(a.quantite_prevue)}</td>
+                  <td className="table-cell text-right font-medium whitespace-nowrap">{fmt.number(a.quantite_cumulee)}</td>
+                  <td className="table-cell text-right whitespace-nowrap">{fmt.currency(a.montant, '')}</td>
+                  <td className="table-cell text-right font-semibold whitespace-nowrap">{fmt.currency(a.montant_cumule, '')}</td>
+                  <td className="table-cell text-right whitespace-nowrap">
                     <div className="flex items-center gap-2 justify-end">
                       <div className="w-16 bg-gray-200 rounded-full h-1.5">
                         <div className={`h-1.5 rounded-full ${parseFloat(a.pourcentage) >= 100 ? 'bg-green-500' : 'bg-brand-500'}`}

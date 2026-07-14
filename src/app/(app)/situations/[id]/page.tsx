@@ -2,9 +2,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, DollarSign, Trash2, BarChart3, Receipt, FileCheck } from 'lucide-react';
+import { ArrowLeft, DollarSign, Trash2, BarChart3, Receipt, FileCheck, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fmt, STATUTS_SITUATION, STATUTS_FACTURE } from '@/lib/utils';
+import { exportSituationDetailPDF } from '@/lib/pdf';
 import { Card, Badge, Button, Loading } from '@/components/ui';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -55,6 +56,11 @@ export default function SituationDetailPage() {
 
   const s  = situation;
   const st = STATUTS_SITUATION[s.statut];
+
+  // TVA/TTC informatifs — taux du marché (jamais codé en dur)
+  const tauxTva    = parseFloat(s.taux_tva ?? 20);
+  const montantTva = parseFloat(s.montant_brut) * (tauxTva / 100);
+  const montantTtc = parseFloat(s.montant_brut) + montantTva;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -108,6 +114,9 @@ export default function SituationDetailPage() {
           <Link href={`/situations/recap/${s.marche_id}`}>
             <Button variant="secondary" size="sm" icon={<BarChart3 className="w-4 h-4" />}>Récapitulatif</Button>
           </Link>
+          <Button variant="secondary" size="sm" icon={<FileDown className="w-4 h-4" />} onClick={() => exportSituationDetailPDF(s)}>
+            Exporter PDF
+          </Button>
         </div>
       </div>
 
@@ -154,31 +163,31 @@ export default function SituationDetailPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="table-header">Code</th>
+                <th className="table-header whitespace-nowrap">N° prix</th>
                 <th className="table-header">Désignation</th>
-                <th className="table-header">U.</th>
-                <th className="table-header text-right">Qté prévue</th>
-                <th className="table-header text-right">Qté cumulée avant</th>
-                <th className="table-header text-right bg-brand-50 text-brand-700">Qté période</th>
-                <th className="table-header text-right">Qté cumulée</th>
-                <th className="table-header text-right">P.U.</th>
-                <th className="table-header text-right">Mt période</th>
-                <th className="table-header text-right">%</th>
+                <th className="table-header whitespace-nowrap">U.</th>
+                <th className="table-header text-right whitespace-nowrap">Qté prévue</th>
+                <th className="table-header text-right whitespace-nowrap">Qté cumulée avant</th>
+                <th className="table-header text-right whitespace-nowrap bg-brand-50 text-brand-700">Qté période</th>
+                <th className="table-header text-right whitespace-nowrap">Qté cumulée</th>
+                <th className="table-header text-right whitespace-nowrap">P.U.</th>
+                <th className="table-header text-right whitespace-nowrap">Prix HT</th>
+                <th className="table-header text-right whitespace-nowrap">%</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {(s.lignes || []).map((l: any, i: number) => (
                 <tr key={l.article_id || i} className="hover:bg-gray-50">
-                  <td className="table-cell font-mono text-xs text-brand-600">{l.code_article}</td>
-                  <td className="table-cell max-w-xs"><p className="truncate">{l.designation}</p></td>
-                  <td className="table-cell text-gray-500 text-xs">{l.unite}</td>
-                  <td className="table-cell text-right text-gray-500">{fmt.number(l.quantite_prevue)}</td>
-                  <td className="table-cell text-right text-gray-500">{fmt.number(l.quantite_cumulee_avant)}</td>
-                  <td className="table-cell text-right font-medium bg-brand-50/30">{fmt.number(l.quantite_periode)}</td>
-                  <td className="table-cell text-right">{fmt.number(l.quantite_cumulee)}</td>
-                  <td className="table-cell text-right text-xs">{fmt.currency(l.prix_unitaire, '')}</td>
-                  <td className="table-cell text-right font-semibold text-green-700">{fmt.currency(l.montant_periode, '')}</td>
-                  <td className="table-cell text-right">
+                  <td className="table-cell font-mono text-xs text-brand-600 whitespace-nowrap">{l.code_article}</td>
+                  <td className="table-cell max-w-xs">{l.designation}</td>
+                  <td className="table-cell text-gray-500 text-xs whitespace-nowrap">{l.unite}</td>
+                  <td className="table-cell text-right text-gray-500 whitespace-nowrap">{fmt.number(l.quantite_prevue)}</td>
+                  <td className="table-cell text-right text-gray-500 whitespace-nowrap">{fmt.number(l.quantite_cumulee_avant)}</td>
+                  <td className="table-cell text-right font-medium bg-brand-50/30 whitespace-nowrap">{fmt.number(l.quantite_periode)}</td>
+                  <td className="table-cell text-right whitespace-nowrap">{fmt.number(l.quantite_cumulee)}</td>
+                  <td className="table-cell text-right text-xs whitespace-nowrap">{fmt.currency(l.prix_unitaire, '')}</td>
+                  <td className="table-cell text-right font-semibold text-green-700 whitespace-nowrap">{fmt.currency(l.montant_periode, '')}</td>
+                  <td className="table-cell text-right whitespace-nowrap">
                     <span className={`text-xs font-medium ${l.pourcentage >= 100 ? 'text-green-600' : 'text-gray-600'}`}>
                       {fmt.pct(l.pourcentage)}
                     </span>
@@ -189,10 +198,20 @@ export default function SituationDetailPage() {
                 <tr><td colSpan={10} className="px-4 py-10 text-center text-gray-400 text-sm">Aucune ligne</td></tr>
               )}
             </tbody>
-            <tfoot className="border-t bg-brand-50">
-              <tr>
-                <td colSpan={8} className="px-4 py-3 text-right font-bold text-brand-700 text-sm">TOTAL MONTANT BRUT</td>
-                <td className="px-4 py-3 text-right font-bold text-brand-700">{fmt.currency(s.montant_brut, '')}</td>
+            <tfoot className="border-t">
+              <tr className="bg-brand-50">
+                <td colSpan={8} className="px-4 py-3 text-right font-bold text-brand-700 text-sm">TOTAL MONTANT BRUT (HT)</td>
+                <td className="px-4 py-3 text-right font-bold text-brand-700 whitespace-nowrap">{fmt.currency(s.montant_brut, '')}</td>
+                <td />
+              </tr>
+              <tr className="bg-gray-50">
+                <td colSpan={8} className="px-4 py-3 text-right text-gray-500 text-sm">TVA ({tauxTva.toFixed(0)} %)</td>
+                <td className="px-4 py-3 text-right text-gray-600 whitespace-nowrap">{fmt.currency(montantTva, '')}</td>
+                <td />
+              </tr>
+              <tr className="bg-gray-100">
+                <td colSpan={8} className="px-4 py-3 text-right font-semibold text-gray-700 text-sm">TOTAL TTC</td>
+                <td className="px-4 py-3 text-right font-semibold text-gray-800 whitespace-nowrap">{fmt.currency(montantTtc, '')}</td>
                 <td />
               </tr>
             </tfoot>

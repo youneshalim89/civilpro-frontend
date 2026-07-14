@@ -356,6 +356,10 @@ export function exportSituationRecapPDF(data: any) {
   doc.text('Historique des Décomptes', 14, y + 4);
   y += 8;
 
+  const tauxTvaRecap    = parseFloat(marche.taux_tva ?? 20);
+  const montantTvaRecap = parseFloat(r.total_situation) * (tauxTvaRecap / 100);
+  const montantTtcRecap = parseFloat(r.total_situation) + montantTvaRecap;
+
   autoTable(doc, {
     startY:     y,
     head:       [['N°', 'Type', 'Période début', 'Période fin', 'Av. financier', 'Montant brut', 'RG', 'Montant net', 'Statut']],
@@ -370,10 +374,16 @@ export function exportSituationRecapPDF(data: any) {
       fmtMAD(s.montant_net),
       s.statut?.toUpperCase(),
     ]),
-    foot:       [[
-      'TOTAL', '', '', '', fmtPct(r.avancement_financier),
-      fmtMAD(r.total_situation), fmtMAD(r.total_rg), fmtMAD(r.total_net), '',
-    ]],
+    foot:       [
+      ['TOTAL (HT)', '', '', '', fmtPct(r.avancement_financier),
+       fmtMAD(r.total_situation), fmtMAD(r.total_rg), fmtMAD(r.total_net), ''],
+      [{ content: `TVA (${tauxTvaRecap.toFixed(0)} %)`, colSpan: 5, styles: { halign: 'right', fillColor: GRAY_LIGHT, textColor: [80,80,80], fontStyle: 'normal' } },
+       { content: fmtMAD(montantTvaRecap), styles: { fillColor: GRAY_LIGHT, textColor: [80,80,80], fontStyle: 'normal' } },
+       { content: '', colSpan: 3, styles: { fillColor: GRAY_LIGHT } }],
+      [{ content: 'TOTAL TTC', colSpan: 5, styles: { halign: 'right', fillColor: [230,230,230], textColor: DARK } },
+       { content: fmtMAD(montantTtcRecap), styles: { fillColor: [230,230,230], textColor: DARK } },
+       { content: '', colSpan: 3, styles: { fillColor: [230,230,230] } }],
+    ],
     headStyles:  { fillColor: DARK, textColor: [255,255,255], fontSize: 7, fontStyle: 'bold' },
     bodyStyles:  { fontSize: 7 },
     footStyles:  { fillColor: BRAND_ORANGE, textColor: [255,255,255], fontStyle: 'bold', fontSize: 7 },
@@ -399,7 +409,7 @@ export function exportSituationRecapPDF(data: any) {
 
     autoTable(doc, {
       startY:     y,
-      head:       [['Code', 'Désignation', 'U.', 'Qté prévue', 'Qté cumulée', 'Montant prévu', 'Montant cumulé', '%']],
+      head:       [['N° prix', 'Désignation', 'U.', 'Qté prévue', 'Qté cumulée', 'Montant prévu', 'Montant cumulé', '%']],
       body:       par_article.map((a: any) => [
         a.code_article,
         a.designation,
@@ -425,4 +435,94 @@ export function exportSituationRecapPDF(data: any) {
 
   addFooter(doc);
   doc.save(`Recap_Situations_${marche.numero_marche}.pdf`);
+}
+
+// ─── Export d'un décompte / situation unique (tableau détaillé) ───────────
+// Reproduit exactement le tableau de l'écran de détail (situations/[id]) :
+// mêmes colonnes, mêmes totaux HT/TVA/TTC. Les montants proviennent
+// uniquement des lignes du décompte (lignes_situation_marche) — jamais de
+// l'avancement physique, qui est un suivi terrain distinct (voir Chantier
+// Bordereau-Decompte-UI, règle validée).
+export function exportSituationDetailPDF(situation: any) {
+  const s = situation;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+
+  let y = addHeader(doc, `DÉCOMPTE N°${s.numero_situation}`, `Marché ${s.numero_marche}`);
+
+  // "Objet" isolé sur sa propre ligne pleine largeur avec retour à la ligne —
+  // un objet de marché réel peut être une phrase longue qui, dans la grille
+  // 3 colonnes générique (infoGrid, sans wrap), débordait sur la colonne
+  // voisine et se superposait au texte de "Maître d'ouvrage".
+  const objetLines = doc.splitTextToSize(s.marche_objet || '—', W - 28 - 30);
+  const objetBlockH = 6 + objetLines.length * 4.5;
+  const gridH = 22;
+  doc.setFillColor(...GRAY_LIGHT);
+  doc.rect(14, y, W - 28, objetBlockH + gridH, 'F');
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(120, 120, 120);
+  doc.text('Objet', 14 + 4, y + 6);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(30, 30, 30);
+  doc.text(objetLines, 14 + 34, y + 6);
+
+  y = infoGrid(doc, [
+    ['Marché',            s.numero_marche],
+    ['Maître d\'ouvrage', s.maitre_ouvrage],
+    ['Type',              s.type_situation],
+    ['Période',           `du ${fmtDate(s.periode_debut)} au ${fmtDate(s.periode_fin)}`],
+    ['Statut',            s.statut?.toUpperCase()],
+  ], y + objetBlockH + 2, 3);
+  y += 6;
+
+  const tauxTva    = parseFloat(s.taux_tva ?? 20);
+  const montantBrut = parseFloat(s.montant_brut);
+  const montantTva  = montantBrut * (tauxTva / 100);
+  const montantTtc  = montantBrut + montantTva;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['N° prix', 'Désignation', 'U.', 'Qté prévue', 'Qté cumulée avant', 'Qté période', 'Qté cumulée', 'P.U.', 'Prix HT', '%']],
+    body: (s.lignes || []).map((l: any) => [
+      l.code_article || '—',
+      l.designation,
+      l.unite,
+      l.quantite_prevue,
+      l.quantite_cumulee_avant,
+      l.quantite_periode,
+      l.quantite_cumulee,
+      fmtMAD(l.prix_unitaire),
+      fmtMAD(l.montant_periode),
+      fmtPct(l.pourcentage),
+    ]),
+    foot: [
+      [{ content: 'MONTANT BRUT (HT)', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
+       { content: fmtMAD(montantBrut), styles: { halign: 'right', fontStyle: 'bold' } }],
+      [{ content: `TVA (${tauxTva.toFixed(0)} %)`, colSpan: 9, styles: { halign: 'right', fontStyle: 'normal', textColor: [100, 100, 100] } },
+       { content: fmtMAD(montantTva), styles: { halign: 'right', fontStyle: 'normal', textColor: [100, 100, 100] } }],
+      [{ content: 'TOTAL TTC', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
+       { content: fmtMAD(montantTtc), styles: { halign: 'right', fontStyle: 'bold' } }],
+    ],
+    headStyles: { fillColor: DARK, textColor: [255, 255, 255], fontSize: 7.5, fontStyle: 'bold' },
+    bodyStyles: { fontSize: 7.5, overflow: 'linebreak' },
+    alternateRowStyles: { fillColor: GRAY_LIGHT },
+    columnStyles: {
+      0: { cellWidth: 16 },
+      2: { cellWidth: 12 },
+      3: { cellWidth: 20, halign: 'right' },
+      4: { cellWidth: 24, halign: 'right' },
+      5: { cellWidth: 20, halign: 'right' },
+      6: { cellWidth: 20, halign: 'right' },
+      7: { cellWidth: 24, halign: 'right' },
+      8: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
+      9: { cellWidth: 30, halign: 'right' },
+    },
+    footStyles: { fillColor: [255, 247, 237], textColor: DARK, fontSize: 8 },
+    margin: { left: 14, right: 14 },
+  });
+
+  addFooter(doc);
+  doc.save(`Decompte_N${s.numero_situation}_${s.numero_marche}.pdf`);
 }
