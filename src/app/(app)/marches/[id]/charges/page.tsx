@@ -17,6 +17,12 @@ const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl
 const apiFetch = (url: string, opts?: RequestInit) =>
   fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
+// Chantier ST-J : champ "sous_traitance" (V1, antérieur au module Sous-traitance)
+// retiré du formulaire — vérifié vide sur toute la base, désormais obsolète.
+// Règle canal unique (CLAUDE.md §Sous-traitance) : toute dépense de
+// sous-traitance passe par le module Sous-traitance (avances/paiements) ou
+// par la charge journalière "sous_traitant" (micro-travail ponctuel), jamais
+// par ce champ mensuel. La colonne reste en base (additif, jamais supprimée).
 const CHAMPS: { key: keyof ChargeMensuelle; label: string }[] = [
   { key: 'masse_salariale', label: 'Masse salariale' },
   { key: 'carburant',       label: 'Carburant' },
@@ -25,7 +31,6 @@ const CHAMPS: { key: keyof ChargeMensuelle; label: string }[] = [
   { key: 'reparations',     label: 'Réparations / pièces' },
   { key: 'pneumatiques',    label: 'Pneumatiques / lubrifiants' },
   { key: 'transport',       label: 'Transport / déplacement' },
-  { key: 'sous_traitance',  label: 'Sous-traitance' },
   { key: 'divers',          label: 'Divers / imprévus' },
 ];
 
