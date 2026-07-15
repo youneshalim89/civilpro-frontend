@@ -23,6 +23,16 @@ const fmtDate = (d?: string) => {
 
 const fmtPct = (v: any) => `${parseFloat(v || 0).toFixed(1)} %`;
 
+// Quantités — même convention que fmt.number() à l'écran (utils.ts) : milliers
+// groupés, 0 décimale. Les colonnes Qté du bordereau ne doivent jamais afficher
+// les valeurs brutes de la base (ex. "4136.000") qui diffèrent du rendu écran.
+const fmtQty = (v: any) => {
+  const n = parseFloat(v) || 0;
+  const neg = n < 0;
+  const grouped = Math.round(Math.abs(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `${neg ? "-" : ""}${grouped}`;
+};
+
 function addHeader(doc: jsPDF, title: string, subtitle: string) {
   const W = doc.internal.pageSize.getWidth();
   doc.setFillColor(...DARK);
@@ -422,8 +432,8 @@ export function exportSituationRecapPDF(data: any) {
         a.code_article,
         a.designation,
         a.unite,
-        a.quantite_prevue,
-        a.quantite_cumulee,
+        fmtQty(a.quantite_prevue),
+        fmtQty(a.quantite_cumulee),
         fmtMAD(a.montant),
         fmtMAD(a.montant_cumule),
         fmtPct(a.pourcentage),
@@ -600,10 +610,10 @@ export function exportSituationDetailPDF(situation: any) {
       l.code_article || '—',
       l.designation,
       l.unite,
-      l.quantite_prevue,
-      l.quantite_cumulee_avant,
-      l.quantite_periode,
-      l.quantite_cumulee,
+      fmtQty(l.quantite_prevue),
+      fmtQty(l.quantite_cumulee_avant),
+      fmtQty(l.quantite_periode),
+      fmtQty(l.quantite_cumulee),
       fmtMAD(l.prix_unitaire),
       fmtMAD(l.montant_periode),
       fmtPct(l.pourcentage),
@@ -622,14 +632,24 @@ export function exportSituationDetailPDF(situation: any) {
       8: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
       9: { cellWidth: 30, halign: 'right' },
     },
-    margin: { left: 14, right: 14 },
+    // Marge basse : aucune ligne ne doit se dessiner dans la bande du pied de
+    // page (tracée après coup par addFooter). Marge haute sur les pages de
+    // continuation : laisse la place au bandeau d'en-tête redessiné ci-dessous
+    // (un bordereau de plusieurs centaines de lignes tient sur plusieurs pages).
+    margin: { top: 35, left: 14, right: 14, bottom: 22 },
+    didDrawPage: (data) => {
+      if (data.pageNumber > 1) {
+        addHeader(doc, docTitle, `Marché ${s.numero_marche}`);
+      }
+    },
   });
 
   let afterTableY = (doc as any).lastAutoTable.finalY + 10;
 
-  // Le récapitulatif + les signatures ont besoin d'environ 75mm — saut de
-  // page si l'espace restant est insuffisant (bordereau long sur plusieurs pages).
-  if (H - afterTableY < 75) {
+  // Le récapitulatif + les signatures ont besoin d'environ 120mm — saut de
+  // page si l'espace restant est insuffisant, plutôt que de les caser dans
+  // une fin de page trop courte (bordereau long sur plusieurs pages).
+  if (H - afterTableY < 120) {
     doc.addPage();
     afterTableY = addHeader(doc, docTitle, `Marché ${s.numero_marche}`) + 6;
   }
@@ -647,11 +667,11 @@ export function exportSituationDetailPDF(situation: any) {
     { label: 'MONTANT NET À PAYER', value: fmtMAD(s.montant_net), bold: true, big: true, highlight: true },
   ]);
 
-  let sigY = Math.max(recapEndY, afterTableY) + 20;
-  if (H - sigY < 40) {
-    doc.addPage();
-    sigY = addHeader(doc, docTitle, `Marché ${s.numero_marche}`) + 30;
-  }
+  // Signatures toujours ancrées près du bas de la DERNIÈRE page — jamais
+  // flottantes juste sous un récapitulatif court avec beaucoup d'espace libre
+  // en dessous. Ne remonte jamais au-dessus du contenu qui précède.
+  const sigAnchorY = H - 45;
+  const sigY = Math.max(recapEndY + 15, sigAnchorY);
   signatureBlock(doc, sigY, s.entreprise_attributaire, s.maitre_ouvrage);
 
   addFooter(doc);
