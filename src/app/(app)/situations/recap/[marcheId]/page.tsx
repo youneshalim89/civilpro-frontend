@@ -27,10 +27,10 @@ export default function SituationRecapPage() {
 
   const { marche, situations, par_article, recapitulatif: r } = data;
 
-  // TVA/TTC informatifs — taux du marché (jamais codé en dur)
+  // TVA/TTC/RG — sommes des valeurs réelles figées par décompte (Chantier Decompte-RG)
   const tauxTva    = parseFloat(marche.taux_tva ?? 20);
-  const montantTva = parseFloat(r.total_situation) * (tauxTva / 100);
-  const montantTtc = parseFloat(r.total_situation) + montantTva;
+  const montantTva = parseFloat(r.total_tva ?? 0);
+  const montantTtc = parseFloat(r.total_ttc ?? 0);
 
   // Données graphique progression
   const chartData = situations.map((s: any) => ({
@@ -64,14 +64,16 @@ export default function SituationRecapPage() {
           { label: 'Total situations',  value: fmt.currency(r.total_situation),   color: 'text-blue-600' },
           { label: 'Total payé',        value: fmt.currency(r.total_paye),        color: 'text-green-600' },
           { label: 'Solde restant',     value: fmt.currency(r.solde_restant),     color: r.solde_restant > 0 ? 'text-orange-600' : 'text-red-600' },
-          { label: 'Total RG',          value: fmt.currency(r.total_rg),          color: 'text-red-500' },
+          { label: 'Total RG', value: fmt.currency(r.total_rg), color: 'text-red-500',
+            sub: r.plafond_rg != null ? `Plafond : ${fmt.currency(r.plafond_rg)}` : undefined },
           { label: 'Total net',         value: fmt.currency(r.total_net),         color: 'text-emerald-600' },
           { label: 'Avancement phys.',  value: fmt.pct(r.avancement_physique),    color: 'text-blue-600' },
           { label: 'Avancement fin.',   value: fmt.pct(r.avancement_financier),   color: 'text-brand-600' },
-        ].map(k => (
+        ].map((k: any) => (
           <Card key={k.label} className="p-4">
             <p className="text-xs text-gray-500">{k.label}</p>
             <p className={`text-lg font-bold mt-1 ${k.color}`}>{k.value}</p>
+            {k.sub && <p className="text-xs text-gray-400 mt-0.5">{k.sub}</p>}
           </Card>
         ))}
       </div>
@@ -148,22 +150,39 @@ export default function SituationRecapPage() {
               ))}
             </tbody>
             <tfoot className="border-t">
-              <tr className="bg-brand-50 font-bold">
-                <td colSpan={4} className="px-4 py-3 text-right text-brand-700">TOTAL GÉNÉRAL (HT)</td>
-                <td className="px-4 py-3 text-right text-brand-700 whitespace-nowrap">{fmt.currency(r.total_situation)}</td>
-                <td className="px-4 py-3 text-right text-red-600 whitespace-nowrap">{fmt.currency(r.total_rg)}</td>
-                <td className="px-4 py-3 text-right text-emerald-700 whitespace-nowrap">{fmt.currency(r.total_net)}</td>
-                <td />
+              <tr className="bg-gray-50 font-semibold">
+                <td colSpan={4} className="px-4 py-2 text-right text-gray-600">TOTAL GÉNÉRAL (HT)</td>
+                <td className="px-4 py-2 text-right text-gray-700 whitespace-nowrap">{fmt.currency(r.total_situation)}</td>
+                <td colSpan={3} />
               </tr>
               <tr className="bg-gray-50 text-xs">
                 <td colSpan={4} className="px-4 py-2 text-right text-gray-500">TVA ({tauxTva.toFixed(0)} %)</td>
                 <td className="px-4 py-2 text-right text-gray-600 whitespace-nowrap">{fmt.currency(montantTva)}</td>
-                <td colSpan={2} />
+                <td colSpan={3} />
               </tr>
               <tr className="bg-gray-100 text-sm font-semibold">
                 <td colSpan={4} className="px-4 py-2 text-right text-gray-700">TOTAL TTC</td>
                 <td className="px-4 py-2 text-right text-gray-800 whitespace-nowrap">{fmt.currency(montantTtc)}</td>
-                <td colSpan={2} />
+                <td colSpan={3} />
+              </tr>
+              <tr className="bg-brand-50 font-bold">
+                <td colSpan={4} className="px-4 py-3 text-right text-brand-700">
+                  TOTAL RETENUE DE GARANTIE
+                  {r.plafond_rg != null && (
+                    <span className="block text-xs font-normal text-gray-400">plafond {fmt.currency(r.plafond_rg)}</span>
+                  )}
+                </td>
+                <td />
+                <td className="px-4 py-3 text-right text-red-600 whitespace-nowrap">{fmt.currency(r.total_rg)}</td>
+                <td />
+                <td />
+              </tr>
+              <tr className="bg-brand-100 font-bold">
+                <td colSpan={4} className="px-4 py-3 text-right text-brand-800">TOTAL NET À PAYER</td>
+                <td />
+                <td />
+                <td className="px-4 py-3 text-right text-emerald-700 whitespace-nowrap">{fmt.currency(r.total_net)}</td>
+                <td />
               </tr>
             </tfoot>
           </table>

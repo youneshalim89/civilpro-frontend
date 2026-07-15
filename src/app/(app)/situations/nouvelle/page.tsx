@@ -14,6 +14,19 @@ const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('gl
 const apiFetch = (url: string, opts?: RequestInit) =>
   fetch(`${API}/api${url}`, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', ...opts?.headers } }).then(r => r.json());
 
+// Montant TTC du marché — même règle 3 étapes que le backend (situations.js,
+// getMontantTtcMarche) : TTC direct si disponible, sinon dérivé du HT
+// (montant_actualise ?? montant_initial) × (1 + taux_tva/100), jamais d'hypothèse
+// silencieuse. Ici purement pour l'aperçu client avant soumission.
+function montantTtcMarche(marche: any): number | null {
+  if (!marche) return null;
+  if (marche.montant_ttc != null) return parseFloat(marche.montant_ttc);
+  const montantHt = marche.montant_actualise ?? marche.montant_initial;
+  if (montantHt == null) return null;
+  const tauxTva = parseFloat(marche.taux_tva ?? 20);
+  return parseFloat(montantHt) * (1 + tauxTva / 100);
+}
+
 export default function NouvelleSituationPage() {
   const router = useRouter();
 
@@ -66,18 +79,22 @@ export default function NouvelleSituationPage() {
     return sum + (parseFloat(String(l.quantite_periode)) * parseFloat(String(l.prix_unitaire)));
   }, 0);
 
-  // RG : 10% du décompte, plafonné au taux de retenue de garantie du marché (cumulé)
-  const rgDejaRetenue = (situationsPrecedentes || []).reduce((s: number, st: any) => s + (parseFloat(st.retenue_garantie) || 0), 0);
-  const plafondRG     = parseFloat(marche?.montant_initial || 0) * (parseFloat(marche?.taux_retenue_garantie || 7) / 100);
-  const rgPotentielle = montantBrut * 0.10;
-  const rgRestante    = Math.max(0, plafondRG - rgDejaRetenue);
-  const retenue    = Math.min(rgPotentielle, rgRestante);
-  const montantNet = montantBrut - retenue;
-
-  // TVA/TTC informatifs — taux du marché (jamais codé en dur), n'affectent pas le calcul RG/net existant
+  // TVA/TTC de la période — taux réel du marché, jamais codé en dur
   const tauxTva  = parseFloat(marche?.taux_tva ?? 20);
   const montantTva  = montantBrut * (tauxTva / 100);
   const montantTtc  = montantBrut + montantTva;
+
+  // RG (règle CCAG-T, Chantier Decompte-RG) : 10% du TTC de ce décompte, plafonné
+  // au cumul de taux_retenue_garantie % du montant TTC du marché (dérivé du HT si
+  // aucun TTC direct n'est stocké).
+  const rgDejaRetenue = (situationsPrecedentes || []).reduce((s: number, st: any) => s + (parseFloat(st.retenue_garantie) || 0), 0);
+  const marcheTtc      = montantTtcMarche(marche);
+  const plafondRG      = marcheTtc !== null ? marcheTtc * (parseFloat(marche?.taux_retenue_garantie || 7) / 100) : 0;
+  const rgPotentielle  = montantTtc * 0.10;
+  const rgRestante     = Math.max(0, plafondRG - rgDejaRetenue);
+  const retenue     = Math.min(rgPotentielle, rgRestante);
+  const montantNet  = montantTtc - retenue;
+  const rgCumuleeApres = rgDejaRetenue + retenue;
 
   // Avancement physique calculé automatiquement à partir des prestations
   const montantTotalBQ = lignes.reduce((s, l) => s + (l.quantite_prevue * l.prix_unitaire), 0);
@@ -186,7 +203,7 @@ export default function NouvelleSituationPage() {
               <h3 className="font-semibold text-gray-800">Bordereau des quantités</h3>
               {marche && (
                 <span className="text-sm text-gray-500">
-                  RG : 10% par décompte, plafonné à {marche.taux_retenue_garantie}% du marché
+                  RG : 10% du TTC par décompte, plafonné à {marche.taux_retenue_garantie}% du marché TTC
                 </span>
               )}
             </div>
@@ -259,16 +276,17 @@ export default function NouvelleSituationPage() {
                     </tr>
                     <tr className="bg-red-50/50 text-sm">
                       <td colSpan={8} className="px-4 py-3 text-right text-red-600">
-                        Retenue de garantie (10%, plafond cumulé {marche?.taux_retenue_garantie}%)
-                        {rgRestante <= 0 && montantBrut > 0 && (
-                          <span className="block text-xs text-gray-400">Plafond déjà atteint — aucune retenue supplémentaire</span>
-                        )}
+                        Retenue de garantie (10% du TTC, plafond cumulé {marche?.taux_retenue_garantie}% du marché TTC)
+                        <span className="block text-xs text-gray-400">
+                          RG cumulée : {fmt.currency(rgCumuleeApres)} / plafond {marcheTtc !== null ? fmt.currency(plafondRG) : '—'}
+                          {rgRestante <= 0 && montantBrut > 0 && ' — plafond déjà atteint, aucune retenue supplémentaire'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap text-red-600 font-semibold">- {fmt.currency(retenue)}</td>
                       <td />
                     </tr>
                     <tr className="bg-brand-50 text-base font-bold">
-                      <td colSpan={8} className="px-4 py-3 text-right text-brand-700">MONTANT NET À PAYER (HT)</td>
+                      <td colSpan={8} className="px-4 py-3 text-right text-brand-700">MONTANT NET À PAYER</td>
                       <td className="px-4 py-3 text-right whitespace-nowrap text-brand-700">{fmt.currency(montantNet)}</td>
                       <td />
                     </tr>

@@ -57,10 +57,11 @@ export default function SituationDetailPage() {
   const s  = situation;
   const st = STATUTS_SITUATION[s.statut];
 
-  // TVA/TTC informatifs — taux du marché (jamais codé en dur)
+  // TVA/TTC/RG — valeurs figées à la création du décompte (colonnes réelles,
+  // Chantier Decompte-RG), jamais recalculées depuis le taux actuel du marché.
   const tauxTva    = parseFloat(s.taux_tva ?? 20);
-  const montantTva = parseFloat(s.montant_brut) * (tauxTva / 100);
-  const montantTtc = parseFloat(s.montant_brut) + montantTva;
+  const montantTva = parseFloat(s.montant_tva ?? 0);
+  const montantTtc = parseFloat(s.montant_ttc ?? 0);
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -139,8 +140,22 @@ export default function SituationDetailPage() {
         <Card>
           <h3 className="font-semibold text-gray-800 mb-4">Récapitulatif financier</h3>
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">Montant brut</span><span className="font-medium">{fmt.currency(s.montant_brut)}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">Retenue de garantie</span><span className="font-medium text-red-600">- {fmt.currency(s.retenue_garantie)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Montant brut HT</span><span className="font-medium">{fmt.currency(s.montant_brut)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">TVA ({tauxTva.toFixed(0)} %)</span><span className="font-medium">{fmt.currency(montantTva)}</span></div>
+            <div className="flex justify-between border-t pt-3 font-semibold text-gray-800">
+              <span>MONTANT TTC</span><span>{fmt.currency(montantTtc)}</span>
+            </div>
+            <div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Retenue de garantie</span>
+                <span className="font-medium text-red-600">- {fmt.currency(s.retenue_garantie)}</span>
+              </div>
+              {s.plafond_rg != null && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  RG cumulée : {fmt.currency(s.rg_cumulee)} / plafond {fmt.currency(s.plafond_rg)}
+                </p>
+              )}
+            </div>
             {Number(s.avances_anterieures) > 0 && (
               <div className="flex justify-between"><span className="text-gray-500">Avances antérieures</span><span className="font-medium text-red-600">- {fmt.currency(s.avances_anterieures)}</span></div>
             )}
@@ -148,7 +163,7 @@ export default function SituationDetailPage() {
               <div className="flex justify-between"><span className="text-gray-500">Déductions diverses</span><span className="font-medium text-red-600">- {fmt.currency(s.deductions_diverses)}</span></div>
             )}
             <div className="flex justify-between border-t pt-3 font-bold text-brand-700">
-              <span>MONTANT NET</span><span>{fmt.currency(s.montant_net)}</span>
+              <span>MONTANT NET À PAYER</span><span>{fmt.currency(s.montant_net)}</span>
             </div>
           </div>
         </Card>

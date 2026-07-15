@@ -356,9 +356,10 @@ export function exportSituationRecapPDF(data: any) {
   doc.text('Historique des Décomptes', 14, y + 4);
   y += 8;
 
+  // Sommes des valeurs réelles figées par décompte (Chantier Decompte-RG)
+  const montantTvaRecap = parseFloat(r.total_tva ?? 0);
+  const montantTtcRecap = parseFloat(r.total_ttc ?? 0);
   const tauxTvaRecap    = parseFloat(marche.taux_tva ?? 20);
-  const montantTvaRecap = parseFloat(r.total_situation) * (tauxTvaRecap / 100);
-  const montantTtcRecap = parseFloat(r.total_situation) + montantTvaRecap;
 
   autoTable(doc, {
     startY:     y,
@@ -375,14 +376,21 @@ export function exportSituationRecapPDF(data: any) {
       s.statut?.toUpperCase(),
     ]),
     foot:       [
-      ['TOTAL (HT)', '', '', '', fmtPct(r.avancement_financier),
-       fmtMAD(r.total_situation), fmtMAD(r.total_rg), fmtMAD(r.total_net), ''],
+      [{ content: 'TOTAL (HT)', colSpan: 5, styles: { halign: 'right' } },
+       { content: fmtMAD(r.total_situation) }, { content: '', colSpan: 3 }],
       [{ content: `TVA (${tauxTvaRecap.toFixed(0)} %)`, colSpan: 5, styles: { halign: 'right', fillColor: GRAY_LIGHT, textColor: [80,80,80], fontStyle: 'normal' } },
        { content: fmtMAD(montantTvaRecap), styles: { fillColor: GRAY_LIGHT, textColor: [80,80,80], fontStyle: 'normal' } },
        { content: '', colSpan: 3, styles: { fillColor: GRAY_LIGHT } }],
       [{ content: 'TOTAL TTC', colSpan: 5, styles: { halign: 'right', fillColor: [230,230,230], textColor: DARK } },
        { content: fmtMAD(montantTtcRecap), styles: { fillColor: [230,230,230], textColor: DARK } },
        { content: '', colSpan: 3, styles: { fillColor: [230,230,230] } }],
+      [{ content: 'RETENUE DE GARANTIE' + (r.plafond_rg != null ? ` (plafond ${fmtMAD(r.plafond_rg)})` : ''),
+         colSpan: 6, styles: { halign: 'right', fontSize: 6.5 } },
+       { content: fmtMAD(r.total_rg), styles: { textColor: [200, 40, 40] } },
+       { content: '', colSpan: 2 }],
+      [{ content: 'TOTAL NET À PAYER', colSpan: 7, styles: { halign: 'right' } },
+       { content: fmtMAD(r.total_net), styles: { textColor: [22, 163, 74] } },
+       { content: '' }],
     ],
     headStyles:  { fillColor: DARK, textColor: [255,255,255], fontSize: 7, fontStyle: 'bold' },
     bodyStyles:  { fontSize: 7 },
@@ -437,18 +445,117 @@ export function exportSituationRecapPDF(data: any) {
   doc.save(`Recap_Situations_${marche.numero_marche}.pdf`);
 }
 
-// ─── Export d'un décompte / situation unique (tableau détaillé) ───────────
+const TYPE_SITUATION_LABEL_PDF: Record<string, string> = {
+  provisoire: 'DÉCOMPTE PROVISOIRE',
+  mensuel:    'SITUATION MENSUELLE',
+  definitif:  'DÉCOMPTE DÉFINITIF',
+};
+
+// Bloc récapitulatif financier encadré (Brut HT → TVA → TTC → RG → NET),
+// aligné à droite comme le total d'une facture — remplace l'ancien foot du
+// tableau des lignes pour un rendu "document officiel" plus lisible.
+function financialRecapBox(doc: jsPDF, x: number, startY: number, w: number, rows: Array<{
+  label: string; value: string; bold?: boolean; big?: boolean; sep?: boolean;
+  color?: [number, number, number]; sub?: string; highlight?: boolean;
+}>): number {
+  let y = startY;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...BRAND_ORANGE);
+  doc.text('Récapitulatif financier', x, y);
+  y += 7;
+
+  rows.forEach(r => {
+    const rowH = r.big ? 9 : 7;
+    if (r.highlight) {
+      doc.setFillColor(...BRAND_ORANGE);
+      doc.rect(x, y - 5, w, rowH + 2, 'F');
+      doc.setTextColor(255, 255, 255);
+    } else {
+      const c = r.color || [40, 40, 40];
+      doc.setTextColor(...c);
+    }
+    doc.setFont('helvetica', r.bold ? 'bold' : 'normal');
+    doc.setFontSize(r.big ? 10 : 8.5);
+    doc.text(r.label, x + 3, y);
+    doc.text(r.value, x + w - 3, y, { align: 'right' });
+    y += rowH;
+    // La ligne "sub" (cumul/plafond) doit faire avancer y pour de bon —
+    // sinon la ligne suivante (ex. le bandeau orange NET) la recouvre.
+    if (r.sub) {
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(r.highlight ? 255 : 140, r.highlight ? 255 : 140, r.highlight ? 255 : 140);
+      doc.text(r.sub, x + 3, y);
+      // Marge généreuse : le bandeau surligné de la ligne suivante remonte de
+      // 5mm au-dessus de sa propre base (voir `y - 5` plus haut) — il faut
+      // donc au moins ce même écart ici pour ne jamais empiéter sur ce sub.
+      y += 6;
+    }
+    if (r.sep) {
+      doc.setDrawColor(210, 210, 210);
+      doc.setLineWidth(0.2);
+      doc.line(x, y - 2, x + w, y - 2);
+      y += 2;
+    }
+  });
+  doc.setTextColor(0, 0, 0);
+  return y;
+}
+
+// Blocs de signature (document contractuel destiné à être imprimé et signé
+// à la main — l'application ne préremplit jamais de nom de signataire).
+function signatureBlock(doc: jsPDF, startY: number, entrepreneur: string, maitreOuvrage: string): void {
+  const W = doc.internal.pageSize.getWidth();
+  const cols = [
+    { label: 'L\'Entrepreneur', sub: entrepreneur || '—' },
+    { label: 'Visé par l\'Ingénieur', sub: '' },
+    { label: 'Le Maître d\'Ouvrage', sub: maitreOuvrage || '—' },
+  ];
+  const gap = 12;
+  const colW = (W - 28 - gap * (cols.length - 1)) / cols.length;
+
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.3);
+  doc.line(14, startY - 6, W - 14, startY - 6);
+
+  cols.forEach((c, i) => {
+    const x = 14 + i * (colW + gap);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(60, 60, 60);
+    doc.text(c.label, x, startY);
+    if (c.sub) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(140, 140, 140);
+      doc.text(c.sub, x, startY + 4.5);
+    }
+    doc.setDrawColor(180, 180, 180);
+    doc.line(x, startY + 24, x + colW, startY + 24);
+    doc.setFontSize(6.5);
+    doc.setTextColor(150, 150, 150);
+    doc.text('Nom, date et signature', x, startY + 28);
+  });
+  doc.setTextColor(0, 0, 0);
+}
+
+// ─── Export d'un décompte / situation unique — document officiel ──────────
 // Reproduit exactement le tableau de l'écran de détail (situations/[id]) :
-// mêmes colonnes, mêmes totaux HT/TVA/TTC. Les montants proviennent
+// mêmes colonnes, mêmes totaux HT/TVA/TTC/RG/NET. Les montants proviennent
 // uniquement des lignes du décompte (lignes_situation_marche) — jamais de
-// l'avancement physique, qui est un suivi terrain distinct (voir Chantier
-// Bordereau-Decompte-UI, règle validée).
+// l'avancement physique, qui est un suivi terrain distinct (Chantier
+// Bordereau-Decompte-UI). Mise en page "document officiel" (Chantier
+// Decompte-RG) : récapitulatif financier encadré + zone de signatures,
+// avec gestion de saut de page si l'espace restant est insuffisant.
 export function exportSituationDetailPDF(situation: any) {
   const s = situation;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const docTitle = `${TYPE_SITUATION_LABEL_PDF[s.type_situation] || 'DÉCOMPTE'} N°${s.numero_situation}`;
 
-  let y = addHeader(doc, `DÉCOMPTE N°${s.numero_situation}`, `Marché ${s.numero_marche}`);
+  let y = addHeader(doc, docTitle, `Marché ${s.numero_marche}`);
 
   // "Objet" isolé sur sa propre ligne pleine largeur avec retour à la ligne —
   // un objet de marché réel peut être une phrase longue qui, dans la grille
@@ -459,6 +566,8 @@ export function exportSituationDetailPDF(situation: any) {
   const gridH = 22;
   doc.setFillColor(...GRAY_LIGHT);
   doc.rect(14, y, W - 28, objetBlockH + gridH, 'F');
+  doc.setFillColor(...BRAND_ORANGE);
+  doc.rect(14, y, 1.2, objetBlockH + gridH, 'F');
 
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
@@ -477,10 +586,12 @@ export function exportSituationDetailPDF(situation: any) {
   ], y + objetBlockH + 2, 3);
   y += 6;
 
-  const tauxTva    = parseFloat(s.taux_tva ?? 20);
+  // Valeurs figées à la création du décompte (Chantier Decompte-RG) — jamais
+  // recalculées depuis le taux actuel du marché.
+  const tauxTva     = parseFloat(s.taux_tva ?? 20);
   const montantBrut = parseFloat(s.montant_brut);
-  const montantTva  = montantBrut * (tauxTva / 100);
-  const montantTtc  = montantBrut + montantTva;
+  const montantTva  = parseFloat(s.montant_tva ?? 0);
+  const montantTtc  = parseFloat(s.montant_ttc ?? 0);
 
   autoTable(doc, {
     startY: y,
@@ -497,14 +608,6 @@ export function exportSituationDetailPDF(situation: any) {
       fmtMAD(l.montant_periode),
       fmtPct(l.pourcentage),
     ]),
-    foot: [
-      [{ content: 'MONTANT BRUT (HT)', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
-       { content: fmtMAD(montantBrut), styles: { halign: 'right', fontStyle: 'bold' } }],
-      [{ content: `TVA (${tauxTva.toFixed(0)} %)`, colSpan: 9, styles: { halign: 'right', fontStyle: 'normal', textColor: [100, 100, 100] } },
-       { content: fmtMAD(montantTva), styles: { halign: 'right', fontStyle: 'normal', textColor: [100, 100, 100] } }],
-      [{ content: 'TOTAL TTC', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
-       { content: fmtMAD(montantTtc), styles: { halign: 'right', fontStyle: 'bold' } }],
-    ],
     headStyles: { fillColor: DARK, textColor: [255, 255, 255], fontSize: 7.5, fontStyle: 'bold' },
     bodyStyles: { fontSize: 7.5, overflow: 'linebreak' },
     alternateRowStyles: { fillColor: GRAY_LIGHT },
@@ -519,9 +622,37 @@ export function exportSituationDetailPDF(situation: any) {
       8: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
       9: { cellWidth: 30, halign: 'right' },
     },
-    footStyles: { fillColor: [255, 247, 237], textColor: DARK, fontSize: 8 },
     margin: { left: 14, right: 14 },
   });
+
+  let afterTableY = (doc as any).lastAutoTable.finalY + 10;
+
+  // Le récapitulatif + les signatures ont besoin d'environ 75mm — saut de
+  // page si l'espace restant est insuffisant (bordereau long sur plusieurs pages).
+  if (H - afterTableY < 75) {
+    doc.addPage();
+    afterTableY = addHeader(doc, docTitle, `Marché ${s.numero_marche}`) + 6;
+  }
+
+  const recapW = 95;
+  const recapX = W - 14 - recapW;
+  const recapEndY = financialRecapBox(doc, recapX, afterTableY, recapW, [
+    { label: 'Montant brut HT', value: fmtMAD(montantBrut) },
+    { label: `TVA (${tauxTva.toFixed(0)} %)`, value: fmtMAD(montantTva) },
+    { label: 'MONTANT TTC', value: fmtMAD(montantTtc), bold: true, sep: true },
+    {
+      label: 'Retenue de garantie', value: '- ' + fmtMAD(s.retenue_garantie), color: [180, 40, 40],
+      sub: s.plafond_rg != null ? `cumul ${fmtMAD(s.rg_cumulee)} / plafond ${fmtMAD(s.plafond_rg)}` : undefined,
+    },
+    { label: 'MONTANT NET À PAYER', value: fmtMAD(s.montant_net), bold: true, big: true, highlight: true },
+  ]);
+
+  let sigY = Math.max(recapEndY, afterTableY) + 20;
+  if (H - sigY < 40) {
+    doc.addPage();
+    sigY = addHeader(doc, docTitle, `Marché ${s.numero_marche}`) + 30;
+  }
+  signatureBlock(doc, sigY, s.entreprise_attributaire, s.maitre_ouvrage);
 
   addFooter(doc);
   doc.save(`Decompte_N${s.numero_situation}_${s.numero_marche}.pdf`);
